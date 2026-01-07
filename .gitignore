@@ -1,0 +1,19 @@
+# 虛擬環境
+.venv/
+__pycache__/
+*.py[cod]
+
+# 環境變數 (最重要！保護你的 Gemini Key)
+.env
+
+# uv 相關
+uv.lock
+
+# 資料庫與日誌
+*.log
+*.sqlite
+
+# IDE 相關
+.vscode/
+.idea/
+data/
