@@ -1,43 +1,30 @@
-## Python AI Agent (FastAPI + RAG + Tool Use)
-這是一個基於 Python FastAPI 與 Gemini 2.0 Flash 構建的全功能 AI Agent 專案。 本專案由原有的 Node.js 版本遷移而來，旨在利用 Python 生態系更強大的 AI 工具鏈（LangChain Python, uv, FastAPI），打造一個具備私有知識庫能力的智能助手。
-
-目前以「血壓計說明書」作為專業領域測試案例 (PoC)。
+## Python AI Medical Agent (FastAPI + RAG + Skill Injection)
+這是一個基於 FastAPI 與 Gemini 2.0 Flash 構建的全功能 AI Agent 專案。本專案利用 Python 生態系強大的 AI 工具鏈，實現了一個具備私有知識庫 (RAG)、動態專業技能 (Skill Injection) 與歷史數據分析能力的智能醫療助手。
 
 # 🚀 核心技術架構
-LLM 模型: Google Gemini 2.0 Flash (支援高效能生成與 Tool Calling)
+LLM 模型: Google Gemini 2.0 Flash (支援高效能 Tool Calling)。
 
-後端框架: FastAPI (支援高併發非同步處理)
+後端框架: FastAPI (異步處理) + LangGraph (Agent 決策流)。
 
-包管理工具: uv (極速的 Python 套件與環境管理工具)
+向量資料庫: PostgreSQL + pgvector (支援語意搜尋)。
 
-向量資料庫: PostgreSQL + pgvector (持久化儲存於 Docker 具名卷)
+技能系統: 實作了 Skill Injection 機制，將專業領域規範（如 medical-expert.md）動態注入 System Prompt，確保 Agent 行為符合醫療倫理與專業標準。
 
-開發框架:
-
-LangChain Python: 負責處理 PDF 解析、文本切片與向量對接。
-
-Pydantic Settings: 嚴謹的環境變數與型別管理。
-
-對話記憶: 實現了基於 Session 的 Context 注入，確保對話連貫性。
+開發工具: uv (極速環境管理)、Docker (資料庫持久化)。
 
 # 🛠️ 功能模組
-RAG 知識檢索:
+1. RAG 知識檢索 (search_device_manual)
+精準對接: 針對血壓計說明書進行 PDF 解析與向量化。
 
-使用 scripts/ingest_pdf.py 將 PDF 切片並轉化為向量。
+容錯處理: 自動將簡單的錯誤代碼（如 ERR3）優化為結構化搜尋詞，提升檢索召回率。
 
-採用 Google text-embedding-004 模型確保檢索精準度。
+2. 生理數據分析 (get_user_health_data)
+趨勢判讀: 支援獲取用戶歷史紀錄，並能計算平均值、識別異常波動。
 
-非同步 API 接口:
+專業對照: 結合說明書標準（如 135/85 mmHg 警戒線）提供健康建議。
 
-基於 Python asyncio 實現，提供高效的 /chat 端點。
-
-專業客服指令 (System Prompt):
-
-嚴格的角色設定，專注於醫療器材領域，具備防禦性回覆機制。
-
-環境持久化:
-
-透過 Docker Volume 技術，確保資料庫內容不會隨重啟消失。
+3. 動態技能注入 (get_skill_content)
+內人格設定: 透過讀取 skills/ 目錄下的 Markdown 檔案，將專業指引（任務指令、輸出規範、免責聲明）直接注入 Agent 意識層。
 
 # 快速開始
 1. 環境準備
@@ -60,37 +47,37 @@ uv sync
 
 # 啟動帶有持久化磁碟卷的資料庫 (Docker)
 ```
+# 建立卷並啟動 pgvector
 docker volume create pg_vector_data
 docker run --name pgvector -e POSTGRES_PASSWORD=你的密碼 -p 5432:5432 -v pg_vector_data:/var/lib/postgresql/data -d ankane/pgvector
-```
-# 啟用資料庫向量擴充 (初次需執行)
-```
+# 啟用擴充
 docker exec -it pgvector psql -U postgres -c "CREATE EXTENSION IF NOT EXISTS vector;"
 ```
 # 導入測試資料 (PDF)
 ```
-uv run python scripts/ingest_pdf.py
+uuv run python ingest_pdf.py  # 匯入說明書
 ```
 # 啟動開發伺服器
 ```
-uv run fastapi dev main.py
+uv sync
+uv run fastapi dev main.py           # 啟動服務
 ```
 
 # 📝 測試案例
-私有知識測試: 詢問「Microlife BP B3 的 AFIB 技術是什麼？」
-
-錯誤代碼測試: 詢問「螢幕顯示 Err 2 是什麼意思？」
-
-上下文記憶測試: 接著詢問「那該怎麼解決？」(測試 Agent 是否記得你在問 Err 2)
-
-邊界防禦測試: 詢問「今天的台北天氣如何？」(預期會根據 System Prompt 禮貌拒絕回答非專業領域問題)
+測試場景	詢問範例	預期 Agent 行為
+私有知識	"ERR3 是什麼意思？"	執行 search_device_manual，回答「壓脈帶漏氣」。
+數據分析	"分析我 2025 年底的血壓。"	執行 get_user_health_data，對比年初數據並給予建議。
+邊界防禦	"今天台北天氣如何？"	根據 medical-expert 規範，禮貌拒絕回答非專業領域問題。
+法律免責	(任何健康建議後)	自動附加「本建議僅供參考，不具醫療診斷效力。」
 
 # 專案結構
 
-app/: FastAPI 核心邏輯 (Routers, Services, Providers)
+app/services/tools/: 核心工具集（RAG、數據分析、系統技能載入）。
 
-scripts/: 資料匯入與資料庫維護腳本
+skills/: 存放各種專業領域的行為準則 (medical-expert.md)。
 
-data/: 存放原始 PDF 說明書
+data/: 存放原始 PDF 說明書。
 
-pyproject.toml: 專案依賴管理 (uv)
+ingest_pdf.py: 資料匯入與資料庫向量化維護腳本。
+
+main.py: FastAPI 啟動入口。
