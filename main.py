@@ -3,6 +3,7 @@ from typing import Union
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from app.api.chat_router import router as chat_router  # 匯入剛寫好的 router
+import uvicorn
 
 app = FastAPI(title="AI Agent Gateway")
 
@@ -25,6 +26,6 @@ def read_item(item_id: int, q: Union[str, None] = None):
 app.mount("/", StaticFiles(directory="static"), name="static")
 
 if __name__ == "__main__":
-    import uvicorn
-
+    print("icrolife AI Agent 研究環境啟動中...")
+    print("API: http://127.0.0.1:8000")
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

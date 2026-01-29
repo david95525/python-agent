@@ -6,16 +6,25 @@ from app.services.agent_service import AgentService
 router = APIRouter()
 agent_service = AgentService()
 
+
 class ChatRequest(BaseModel):
     message: str
     userId: str = "default-user"
+
 
 # 使用 @router 替代 @app
 @router.post("/chat")
 async def chat(request: ChatRequest):
     try:
-        # 呼叫 Service 層處理邏輯
-        result = await agent_service.handle_chat(request.userId, request.message)
-        return {"text": result}
+        result_data = await agent_service.handle_chat(request.userId,
+                                                      request.message)
+        return {
+            "status": "success",
+            "data": {
+                "text": result_data["text"],
+                "graph": result_data["graph"],
+                "intent": result_data["intent"]
+            }
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
