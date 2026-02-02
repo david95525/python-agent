@@ -26,6 +26,6 @@ def read_item(item_id: int, q: Union[str, None] = None):
 app.mount("/", StaticFiles(directory="static"), name="static")
 
 if __name__ == "__main__":
-    print("icrolife AI Agent 研究環境啟動中...")
+    print("Microlife AI Agent 研究環境啟動中...")
     print("API: http://127.0.0.1:8000")
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

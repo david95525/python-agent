@@ -2,6 +2,9 @@ from typing import List, Dict, Annotated, TypedDict, Literal
 import operator
 import json
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
+from langchain_aws import ChatBedrock
+
 from langgraph.graph import StateGraph, START, END
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 
@@ -24,11 +27,8 @@ class AgentState(TypedDict):
 class AgentService:
 
     def __init__(self):
-        # 初始化 LLM
-        self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash",
-            google_api_key=settings.gemini_api_key,
-            temperature=0)
+        # 初始化 LLM (動態選擇 LLM)
+        self.llm = self._get_llm()
 
         # 載入技能內容
         self.skills = {
@@ -42,6 +42,30 @@ class AgentService:
 
         # 簡單記憶體
         self.chat_history_map: Dict[str, List[BaseMessage]] = {}
+
+    def _get_llm(self):
+        """根據環境變數返回對應的 LLM 實例"""
+        # 注意：通常 Embedding 與 LLM Provider 會設為同一個，但也可以分開
+        provider = os.getenv("LLM_PROVIDER", "google").lower()
+
+        if provider == "google":
+            return ChatGoogleGenerativeAI(
+                model="gemini-2.0-flash",
+                google_api_key=settings.gemini_api_key,
+                temperature=0)
+        elif provider == "openai":
+            return ChatOpenAI(model="gpt-4o",
+                              api_key=os.getenv("OPENAI_API_KEY"),
+                              temperature=0)
+        elif provider == "bedrock":
+            # 未來上 AWS 之後的配置
+            return ChatBedrock(
+                model_id=
+                "anthropic.claude-3-5-sonnet-20240620-v1:0",  # 或 Llama 3
+                region_name=os.getenv("AWS_REGION", "us-east-1"),
+                model_kwargs={"temperature": 0})
+        else:
+            raise ValueError(f"不支援的 LLM Provider: {provider}")
 
     def _build_workflow(self):
         graph = StateGraph(AgentState)
@@ -143,7 +167,8 @@ class AgentService:
     async def node_general_assistant(self, state: AgentState):
         """通用節點：處理範疇外問題"""
         res = await self.llm.ainvoke(
-            f"你是一位禮貌的助手，請告知用戶你專注於血壓健康，無法回答以下問題：{state['input_message']}")
+            f"你是一位禮貌的助手，請告知用戶你專注於健康數據分析或設備說明，無法回答以下問題：{state['input_message']}"
+        )
         print(
             f"🧠 [Router Decision] 意圖辨識結果: {state['intent']} (原始訊息: {state['input_message']})"
         )

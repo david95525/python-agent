@@ -1,13 +1,35 @@
 import os
 from sqlalchemy import text
 from langchain.tools import tool
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain_postgres.vectorstores import PGVector
 from app.core.config import settings
 import json
-# 共用 Embeddings
-embeddings = GoogleGenerativeAIEmbeddings(
-    model="models/text-embedding-004", google_api_key=settings.gemini_api_key)
+# 根據 provider 動態載入
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_openai import OpenAIEmbeddings
+from langchain_aws import BedrockEmbeddings
+from langchain_postgres.vectorstores import PGVector
+
+
+def get_active_embeddings():
+    """與 ingest.py 保持一致的 Embedding 獲取邏輯"""
+    provider = os.getenv("EMBEDDING_PROVIDER", "google").lower()
+
+    if provider == "google":
+        return GoogleGenerativeAIEmbeddings(
+            model="models/text-embedding-004",
+            google_api_key=settings.gemini_api_key)
+    elif provider == "openai":
+        return OpenAIEmbeddings(model="text-embedding-3-small")
+    elif provider == "bedrock":
+        return BedrockEmbeddings(region_name=os.getenv("AWS_REGION",
+                                                       "us-east-1"),
+                                 model_id="amazon.titan-embed-text-v2:0")
+    else:
+        raise ValueError(f"不支援的 Provider: {provider}")
+
+
+# 初始化目前使用的 Embeddings
+embeddings = get_active_embeddings()
 
 
 @tool
@@ -18,21 +40,19 @@ async def search_device_manual(query: str) -> str:
     這是獲取儀器官方說明書內容的唯一來源。
     """
     try:
+        # 動態決定 Collection 名稱
+        provider = os.getenv("EMBEDDING_PROVIDER", "google").lower()
+        collection_name = f"microlife_docs_{provider}"
         #優化檢索詞：如果 query 很短又是代碼，幫它補上上下文，增加向量比對權重
-        # 例如用戶只輸入 "ERR3"，我們會搜尋 "血壓計 錯誤代碼 ERR3 解決方法"
         search_query = query
         if len(query) < 10 and any(char.isdigit() for char in query):
             search_query = f"血壓計 錯誤代碼 {query} 的意義與排除故障方法"
         vector_store = PGVector(
             embeddings=embeddings,
             connection=settings.database_url,
-            collection_name="bp_docs_gemini",
+            collection_name=collection_name,
         )
-
-        # 診斷日誌：確認 Agent 傳進來的原始問題與我們優化後的搜尋詞
-        print(f"🔍 [RAG Debug] 原始問題: {query}")
-        print(f"🔍 [RAG Debug] 優化後搜尋詞: {search_query}")
-
+        print(f"🔍 [RAG Debug] Provider: {provider} | Query: {search_query}")
         with vector_store.session_maker() as session:
             count_query = text("""
                 SELECT count(*) FROM langchain_pg_embedding 
@@ -42,14 +62,12 @@ async def search_device_manual(query: str) -> str:
                 "name": "bp_docs_gemini"
             }).scalar()
             print(f"📊 [DB Check] 向量庫總筆數: {count}")
-
-        # 💡 將 k 值從 3 提高到 5，增加在密集文字中命中的機率
-        # docs = await vector_store.asimilarity_search(search_query, k=8)
+        # 執行檢索 (維持 k=8 增加命中率)
         docs = vector_store.similarity_search(search_query, k=8)
         if not docs:
             print("⚠️ [RAG Warning] 資料庫回傳為空！")
             return "說明書中目前查無此錯誤代碼的具體描述，請確認代碼是否輸入正確或諮詢客服。"
-            # 診斷：看看抓到了什麼
+        # 診斷：看看抓到了什麼
         print(f"🎯 [RAG Result] 找到了 {len(docs)} 個相關片段：")
         for i, doc in enumerate(docs[:3]):
             # 先處理文字，避開在 f-string 裡使用反斜線
