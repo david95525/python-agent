@@ -1,0 +1,27 @@
+# 排除 Python 虛擬環境
+.venv/
+venv/
+env/
+
+# 排除 Python 編譯暫存檔
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 排除開發工具設定
+.git/
+.gitignore
+.vscode/
+.idea/
+.github/
+
+# 排除本地日誌與數據（由 Docker Compose 掛載即可，不需要包進鏡像）
+logs/
+postgres_data/
+
+# 排除機密檔案 (雲端環境會由環境變數注入)
+.env
+
+# 排除 macOS 系統檔
+.DS_Store

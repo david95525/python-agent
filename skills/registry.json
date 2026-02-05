@@ -1,0 +1,14 @@
+{
+  "skills": [
+    {
+      "id": "device_expert",
+      "description": "Microlife 設備專家，處理錯誤代碼(ERR)、操作步驟、清潔與硬體維護查詢。",
+      "file": "device_expert.md"
+    },
+    {
+      "id": "health_analyst",
+      "description": "健康數據分析師，處理血壓趨勢、心率異常判斷與健康報告解讀。",
+      "file": "health_analyst.md"
+    }
+  ]
+}

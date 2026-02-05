@@ -1,8 +1,8 @@
 ## Python AI Medical Agent (FastAPI + RAG + Skill Injection)
-這是一個基於 FastAPI 與 Gemini 2.0 Flash 構建的全功能 AI Agent 專案。本專案利用 Python 生態系強大的 AI 工具鏈，實現了一個具備私有知識庫 (RAG)、動態專業技能 (Skill Injection) 與歷史數據分析能力的智能醫療助手。
+這是一個基於 FastAPI 與 Gemini 2.5 Flash 構建的全功能 AI Agent 專案。本專案利用 Python 生態系強大的 AI 工具鏈，實現了一個具備私有知識庫 (RAG)、動態專業技能 (Skill Injection) 與歷史數據分析能力的智能醫療助手。
 
 # 🚀 核心技術架構
-LLM 模型: Google Gemini 2.0 Flash (支援高效能 Tool Calling)。
+LLM 模型: Google Gemini 2.5 Flash (支援高效能 Tool Calling)。
 
 後端框架: FastAPI (異步處理) + LangGraph (Agent 決策流)。
 

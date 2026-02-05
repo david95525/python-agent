@@ -1,318 +1,50 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html>
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Microlife 智能助手 (研究版)</title>
-    <script type="module">
-        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-        mermaid.initialize({
-            startOnLoad: false,
-            theme: 'neutral',
-            securityLevel: 'loose', // 允許渲染 HTML 標籤
-            flowchart: {
-                useMaxWidth: false,
-                htmlLabels: true,
-                rankSpacing: 50,
-                nodeSpacing: 50
-            }
-        });
-        window.mermaid = mermaid;
-    </script>
+    <title>AI Agent Lab</title>
     <style>
-        :root {
-            --primary-color: #007bff;
-            --bg-color: #f4f7f6;
-            --user-bubble: #007bff;
-            --agent-bubble: #ffffff;
-        }
-
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: var(--bg-color);
-            margin: 0;
+            font-family: sans-serif;
             display: flex;
             justify-content: center;
-            align-items: center;
-            height: 100vh;
-            gap: 20px;
-            /* 為看板留出間距 */
+            padding: 50px;
         }
 
-        /* 聊天主容器 */
-        .chat-container {
-            width: 100%;
-            max-width: 450px;
-            height: 85vh;
-            background: white;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-            border-radius: 15px;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        /* 研究看板：顯示流程圖 */
-        .research-board {
-            width: 500px;
-            /* 強制固定寬度 */
-            height: 800px;
-            /* 強制固定高度 */
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            /* 避免內容溢出看板 */
-        }
-
-        #graph-container {
-            flex: 1;
-            width: 100%;
-            height: 100%;
-            /* 填滿看板剩下的空間 */
-            overflow: auto;
-            /* 關鍵：內容超過 500x850 時顯示捲軸 */
-            border: 1px inset #f0f0f0;
-            border-radius: 8px;
-            background: #fafafa;
-        }
-
-        .board-header {
-            font-weight: bold;
-            color: #555;
-            border-bottom: 2px solid var(--primary-color);
-            padding-bottom: 10px;
-            margin-bottom: 15px;
-        }
-
-        /* Mermaid 渲染區域 */
-        #mermaid-graph {
-            display: block;
-            width: 100%;
-            margin: 0 auto;
-            /* 確保初始文字在渲染前是隱藏的，避免閃爍 */
-            min-height: 200px;
-        }
-
-        .mermaid svg {
-            /* 讓 SVG 依照內容寬度撐開，但寬度至少 100% */
-            min-width: 450px;
-            width: 100% !important;
-            max-height: 700px;
-        }
-
-        /* 聊天內容區 */
-        .chat-header {
-            background: var(--primary-color);
-            color: white;
-            padding: 15px 20px;
-            font-weight: bold;
-        }
-
-        #chat-box {
-            flex: 1;
-            padding: 20px;
-            overflow-y: auto;
-            background: #f8f9fa;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        /* 氣泡樣式與之前相同... */
-        .msg {
-            max-width: 80%;
-            padding: 10px 15px;
-            border-radius: 18px;
-            font-size: 0.95em;
-            line-height: 1.4;
-        }
-
-        .user-msg {
-            align-self: flex-end;
-            background-color: var(--user-bubble);
-            color: white;
-            border-bottom-right-radius: 4px;
-        }
-
-        .agent-msg {
-            align-self: flex-start;
-            background-color: var(--agent-bubble);
-            color: #333;
-            border: 1px solid #eee;
-            border-bottom-left-radius: 4px;
-        }
-
-        /* 高亮 Mermaid 節點的 CSS */
-        .activeNode>rect {
-            fill: #ffcc00 !important;
-            stroke: #ff9900 !important;
-            stroke-width: 3px !important;
-        }
-
-        .input-area {
-            padding: 15px;
-            display: flex;
-            gap: 10px;
-            background: white;
-            border-top: 1px solid #eee;
-        }
-
-        #userInput {
-            flex: 1;
-            padding: 10px 15px;
+        .card {
             border: 1px solid #ddd;
-            border-radius: 25px;
-            outline: none;
+            padding: 20px;
+            margin: 20px;
+            border-radius: 8px;
+            width: 200px;
+            text-align: center;
+            transition: 0.3s;
         }
 
-        button {
-            background: var(--primary-color);
-            color: white;
-            border: none;
-            padding: 8px 18px;
-            border-radius: 20px;
-            cursor: pointer;
+        .card:hover {
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            transform: translateY(-5px);
         }
 
-        .activeEmergencyNode>rect {
-            fill: #ff4d4d !important;
-            stroke: #b30000 !important;
+        a {
+            text-decoration: none;
+            color: #007bff;
+            font-weight: bold;
         }
     </style>
 </head>
 
 <body>
-
-    <div class="chat-container">
-        <div class="chat-header">Microlife 智能助手</div>
-        <div id="chat-box">
-            <div class="msg agent-msg">
-                您好！我是 <b>Microlife 專屬智能助理</b>。<br>
-                我專精於為您解決 Microlife 產品相關問題：<br><br>
-                🔧 <b>硬體支援</b>：設備設置及手冊引導。<br>
-                📊 <b>個人健康分析</b>：解讀血壓、血氧等趨勢並提供風險預警。<br><br>
-                請輸入您的設備狀態或測量數值，我將為您進行分析。
-            </div>
-        </div>
-        <div class="input-area">
-            <input type="text" id="userInput" placeholder="請輸入問題...">
-            <button onclick="sendMessage()">送出</button>
-        </div>
+    <div class="card">
+        <h3>Agent Service</h3>
+        <p>基於 LangGraph 的智慧醫療助手</p>
+        <a href="/chat">進入</a>
     </div>
-    <div class="research-board">
-        <div class="board-header">LangGraph 決策追蹤 (研究版)</div>
-        <div id="intent-display" style="font-size: 0.8em; color: #888; margin-bottom: 10px;">系統狀態：就緒</div>
-        <div id="graph-container">
-            <pre class="mermaid" id="mermaid-graph">
-            graph TD
-            START((START)) --> Router{Intent Router}
-    
-            Router -- Hardware Issues --> device_expert[Device Expert]
-            Router -- Health Data --> health_analyst[Health Analyst]
-            Router -- Chat/Others --> general_assistant[General Assistant]
-    
-            %% Condition Branch
-            health_analyst --> IsEmergency{Risk Assessment}
-            IsEmergency -- Abnormal --> emergency_advice[Emergency Advice]
-            IsEmergency -- Normal --> END((END))
-    
-            device_expert --> END
-            general_assistant --> END
-            emergency_advice --> END     
-        </pre>
-        </div>
+    <div class="card">
+        <h3>Deep Agent</h3>
+        <p>研究中...</p>
+        <a href="/deep" style="color: #666;">即將推出</a>
     </div>
-
-    <script>
-        async function sendMessage() {
-            const input = document.getElementById('userInput');
-            const chatBox = document.getElementById('chat-box');
-            const message = input.value.trim();
-            if (!message) return;
-
-            chatBox.innerHTML += `<div class="msg user-msg">${message}</div>`;
-            input.value = '';
-
-            const loadingId = "loading-" + Date.now();
-            chatBox.innerHTML += `<div class="msg agent-msg" id="${loadingId}">分析路徑中...</div>`;
-            chatBox.scrollTop = chatBox.scrollHeight;
-
-            try {
-                const response = await fetch('/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: message, userId: "default-user" })
-                });
-
-                const json = await response.json();
-                const payload = json.data;
-
-                // 1. 更新文字
-                document.getElementById(loadingId).innerText = payload.text;
-
-                // 2. 更新研究看板顯示
-                const intentText = payload.intent.toUpperCase();
-                const emergencyTag = payload.is_emergency ? " <span style='color:red;'>(觸發預警)</span>" : "";
-                document.getElementById('intent-display').innerHTML = `意圖辨識：${intentText}${emergencyTag}`;
-
-                // 3. 處理 Mermaid 繪圖
-                const graphContainer = document.getElementById('mermaid-graph');
-
-                // 重要：在更新內容前移除舊的 processed 屬性，否則 mermaid 不會重繪
-                graphContainer.removeAttribute('data-processed');
-
-                let mermaidCode = payload.graph;
-
-                // 根據意圖與緊急狀態動態添加高亮類別
-                // 這裡的 ID (device_expert 等) 必須與你 Python 產生的 mermaid ID 完全一致
-                if (payload.intent === 'device') mermaidCode += '\nclass device_expert activeNode';
-                if (payload.intent === 'health') mermaidCode += '\nclass health_analyst activeNode';
-                if (payload.intent === 'general') mermaidCode += '\nclass general_assistant activeNode';
-
-                // 關鍵：如果觸發緊急狀態，同時高亮分析師與緊急建議節點
-                if (payload.is_emergency) {
-                    mermaidCode += '\nclass emergency_advice activeEmergencyNode';
-                }
-                // 更新 HTML 內容
-                graphContainer.innerHTML = mermaidCode;
-
-                // 手動重新渲染 (v10+ 推薦做法)
-                await mermaid.run({
-                    nodes: [graphContainer]
-                });
-                const svgElement = graphContainer.querySelector('svg');
-                if (svgElement) {
-                    svgElement.style.maxWidth = 'none';
-                    svgElement.style.width = '100%';
-                    svgElement.style.height = 'auto';
-                }
-            } catch (error) {
-                console.error("RAG Error:", error);
-                document.getElementById(loadingId).innerText = "連線失敗，請檢查後端日誌。";
-            } finally {
-                chatBox.scrollTop = chatBox.scrollHeight;
-            }
-        }
-        window.addEventListener('DOMContentLoaded', async () => {
-            const graphContainer = document.getElementById('mermaid-graph');
-            if (graphContainer) {
-                // 確保 mermaid 已經載入
-                try {
-                    await mermaid.run({
-                        nodes: [graphContainer]
-                    });
-                    console.log("🚀 [System] 預設流程圖渲染成功");
-                } catch (e) {
-                    console.error("❌ [System] 預設流程圖渲染失敗:", e);
-                }
-            }
-        });
-    </script>
 </body>
 
 </html>

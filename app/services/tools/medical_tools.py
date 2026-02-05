@@ -1,18 +1,23 @@
 import os
+import json
 from sqlalchemy import text
 from langchain.tools import tool
 from app.core.config import settings
-import json
+from app.utils.logger import setup_logger
+
 # 根據 provider 動態載入
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_openai import OpenAIEmbeddings
 from langchain_aws import BedrockEmbeddings
 from langchain_postgres.vectorstores import PGVector
 
+# 初始化 Logger
+logger = setup_logger("MedicalTools")
+
 
 def get_active_embeddings():
-    """與 ingest.py 保持一致的 Embedding 獲取邏輯"""
     provider = os.getenv("EMBEDDING_PROVIDER", "google").lower()
+    logger.debug(f"[Embedding] 正在初始化 Provider: {provider}")
 
     if provider == "google":
         return GoogleGenerativeAIEmbeddings(
@@ -28,65 +33,67 @@ def get_active_embeddings():
         raise ValueError(f"不支援的 Provider: {provider}")
 
 
-# 初始化目前使用的 Embeddings
 embeddings = get_active_embeddings()
 
 
 @tool
 async def search_device_manual(query: str) -> str:
-    """
-    【重要】當使用者詢問血壓計的錯誤代碼（如 ERR1, ERR2, ERR3, E1 等）、
-    故障排除、操作步驟、清洗保養或產品規格時，必須優先調用此工具。
-    這是獲取儀器官方說明書內容的唯一來源。
-    """
+    """獲取儀器官方說明書內容的唯一來源。"""
     try:
-        # 動態決定 Collection 名稱
         provider = os.getenv("EMBEDDING_PROVIDER", "google").lower()
-        collection_name = f"microlife_docs_{provider}"
-        #優化檢索詞：如果 query 很短又是代碼，幫它補上上下文，增加向量比對權重
+        collection_name = f"docs_{provider}"
+
+        # 優化檢索詞
         search_query = query
         if len(query) < 10 and any(char.isdigit() for char in query):
             search_query = f"血壓計 錯誤代碼 {query} 的意義與排除故障方法"
+
         vector_store = PGVector(
             embeddings=embeddings,
             connection=settings.database_url,
             collection_name=collection_name,
         )
-        print(f"🔍 [RAG Debug] Provider: {provider} | Query: {search_query}")
+
+        logger.info(
+            f"🔍 [RAG] 執行檢索. Original: {query} | Augmented: {search_query}")
+
+        # 診斷數據庫連線與筆數
         with vector_store.session_maker() as session:
             count_query = text("""
                 SELECT count(*) FROM langchain_pg_embedding 
                 WHERE collection_id = (SELECT uuid FROM langchain_pg_collection WHERE name = :name)
             """)
             count = session.execute(count_query, {
-                "name": "bp_docs_gemini"
+                "name": collection_name
             }).scalar()
-            print(f"📊 [DB Check] 向量庫總筆數: {count}")
-        # 執行檢索 (維持 k=8 增加命中率)
+            logger.debug(
+                f"[DB Check] Collection '{collection_name}' 總筆數: {count}")
+
+        # 執行檢索
         docs = vector_store.similarity_search(search_query, k=8)
+
         if not docs:
-            print("⚠️ [RAG Warning] 資料庫回傳為空！")
-            return "說明書中目前查無此錯誤代碼的具體描述，請確認代碼是否輸入正確或諮詢客服。"
-        # 診斷：看看抓到了什麼
-        print(f"🎯 [RAG Result] 找到了 {len(docs)} 個相關片段：")
+            logger.warning(f"[RAG] 檢索結果為空！Query: {search_query}")
+            return "說明書中目前查無此內容，請諮詢客服。"
+
+        # 記錄抓到的片段摘要 (DEBUG 模式下可見)
+        logger.debug(f"[RAG] 命中 {len(docs)} 個片段")
         for i, doc in enumerate(docs[:3]):
-            # 先處理文字，避開在 f-string 裡使用反斜線
-            clean_content = doc.page_content[:100].replace('\n', ' ')
-            print(f"  📌 Rank {i+1}: {clean_content}...")
+            clean_snippet = doc.page_content[:100].replace('\n', ' ')
+            logger.debug(f"  Rank {i+1} Snippet: {clean_snippet}...")
+
         return "\n\n".join([doc.page_content for doc in docs])
 
     except Exception as e:
-        print(f"❌ [RAG Error] {str(e)}")
+        logger.error(f"[RAG Error] 檢索失敗: {str(e)}", exc_info=True)
         return f"RAG 查詢失敗: {str(e)}"
 
 
 @tool
 def get_user_health_data(user_id: str) -> str:
-    """
-    獲取用戶的歷史血壓與心率數據。
-    當用戶詢問「我的血壓最近怎麼樣？」或「幫我分析去年的趨勢」時調用。
-    """
-    # 模擬 2025 年的血壓數據庫 (對應你的 Node.js 版本)
+    """獲取用戶的歷史血壓與心率數據。"""
+    logger.info(f"[HealthData] 讀取用戶健康數據: {user_id}")
+    # 模擬數據
     bp_history = [{
         "date": "2025-01-05",
         "sys": 118,
@@ -209,11 +216,6 @@ def get_user_health_data(user_id: str) -> str:
         "pul": 71
     }]
 
-    # 這裡直接回傳 JSON 字串，Gemini 非常擅長處理這種格式
-    return json.dumps(
-        {
-            "status": "success",
-            "userId": user_id,
-            "history": bp_history
-        },
-        ensure_ascii=False)
+    result = {"status": "success", "userId": user_id, "history": bp_history}
+    logger.debug(f"[HealthData] 成功獲取 {len(bp_history)} 筆歷史紀錄")
+    return json.dumps(result, ensure_ascii=False)
