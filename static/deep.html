@@ -165,23 +165,43 @@
                     body: JSON.stringify({ symbol: symbol })
                 });
 
+                if (!response.ok) throw new Error(`HTTP 錯誤! 狀態碼: ${response.status}`);
+
                 const jsonResponse = await response.json();
-                console.log("Official API Response:", jsonResponse); // 方便你在 F12 檢查
+                console.log("Official API Response:", jsonResponse);
 
-                // 修正路徑：根據你的後端輸出，層級是 jsonResponse.data.final_response
-                // 使用 || 給予預設值，避免 replace 報錯
-                const content = jsonResponse.data?.final_response || "官方代理目前未回傳具體內容，請檢查後端日誌。";
+                // --- 核心應對邏輯：層層檢查 ---
+                let content = "";
+                const finalResponse = jsonResponse?.result?.final_response;
 
-                thought.innerHTML += "> [SUB-AGENT] 任務拆解與工具調用完成\n";
-                thought.innerHTML += "> [SYNTHESIS] 報告彙整完畢\n";
+                if (Array.isArray(finalResponse) && finalResponse.length > 0 && finalResponse[0].text) {
+                    // 狀況 A: 正常拿到資料
+                    content = finalResponse[0].text;
 
-                status.innerText = "完成";
-                resultArea.innerHTML = content.replace(/\n/g, '<br>');
+                    // 額外檢查：如果 AI 回傳太短 (例如只回了「無」)
+                    if (content.trim().length < 5) {
+                        content = "⚠️ AI 回傳內容過於簡短，可能因數據源受限無法分析該標的。";
+                    }
+                } else if (jsonResponse?.error) {
+                    // 狀況 B: 後端有傳回明確錯誤訊息
+                    content = `❌ 系統錯誤: ${jsonResponse.error}`;
+                } else {
+                    // 狀況 C: 完全沒資料 (Null 或空陣列)
+                    content = "⚠️ 官方代理未回傳具體分析，可能該標的 (Symbol) 暫無即時行情或新聞。";
+                }
+
+                thought.innerHTML += "> [SUB-AGENT] 任務完成\n";
+                status.innerText = content.includes("⚠️") || content.includes("❌") ? "異常" : "完成";
+
+                // 渲染 (加入簡單的粗體處理讓報告好看點)
+                resultArea.innerHTML = content
+                    .replace(/\n/g, '<br>')
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 
             } catch (e) {
                 console.error("Official Fetch Error:", e);
-                status.innerText = "出錯";
-                resultArea.innerHTML = `<span class="text-red-400">執行失敗: ${e.message}</span>`;
+                status.innerText = "網路錯誤";
+                resultArea.innerHTML = `<span class="text-red-400">無法連線至服務: ${e.message}</span>`;
             }
         }
     </script>

@@ -15,24 +15,27 @@ def get_market_news(query: str) -> str:
     try:
         search_query = query
         if ".TW" in query.upper():
-            # 簡單映射：2330 -> 台積電, 2454 -> 聯發科 (或直接拿掉 .TW 搜)
-            search_query = f"{query.split('.')[0]} 股票 新聞"
-        with DDGS() as ddgs:
-            # 搜尋財經相關新聞
-            results = [r for r in ddgs.text(search_query, max_results=5)]
+            # 優化搜尋關鍵字，增加「財經」或「股價」字眼能讓搜尋更精準
+            search_query = f"{query.split('.')[0]} 股票 財經 新聞"
 
-            if not results:
-                return f"找不到關於 {query} 的相關新聞。"
+        ddgs = DDGS(timeout=10)
 
-            # 格式化輸出
-            formatted_results = "\n".join([
-                f"- {r['title']}: {r['body']} (連結: {r['href']})"
-                for r in results
-            ])
-            return formatted_results
+        # 轉換為 list 前先確保有拿到 generator
+        results = list(ddgs.text(search_query, max_results=5))
+
+        if not results:
+            return f"找不到關於 {query} 的相關新聞。"
+
+        # 格式化輸出
+        formatted_results = "\n".join([
+            f"- {r.get('title', '無標題')}: {r.get('body', '無內容')} (連結: {r.get('href', '#')})"
+            for r in results
+        ])
+        return formatted_results
+
     except Exception as e:
-        logger.error(f"新聞搜尋失敗: {e}")
-        return f"無法獲取 {query} 的相關新聞。"
+        logger.error(f"[Critical] 新聞搜尋崩潰: {str(e)}")
+        return f"目前無法獲取 {query} 的即時新聞（搜尋引擎繁忙），請根據歷史數據進行分析。"
 
 
 # 股價工具 (結構化數據)
