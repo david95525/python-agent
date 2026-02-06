@@ -89,6 +89,8 @@ class FinancialAgentService(BaseAgent):
     async def node_final_decision(self, state):
         """決策節點：產出最後報告"""
         logger.info("[Financial Agent] 正在產出最終決策...")
+        skill_config = load_specialized_skill.invoke(
+            {"skill_name": "financial_expert"})
         current_date = datetime.now().strftime("%Y-%m-%d")
         prompt = (f"今天是 {current_date}。\n"
                   f"請嚴格遵守以下【輸出規範】處理數據：\n\n"
