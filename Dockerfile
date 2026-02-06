@@ -20,6 +20,7 @@ RUN uv pip install --system --no-cache -r pyproject.toml
 # 複製專案文件
 COPY . .
 
+ENV PYTHONPATH=/app
 # 建立必要目錄
 RUN mkdir -p logs data && chmod -R 777 logs data
 
@@ -29,4 +30,5 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 
 # 啟動指令：使用 uvicorn 確保非同步性能，並動態綁定 Railway 的 Port
+
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]

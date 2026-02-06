@@ -28,7 +28,7 @@ class FinancialAgentService(BaseAgent):
         self.workflow = self._build_workflow()
         self.manual_app = self.workflow.compile()
         # DeepAgents
-        base_dir = os.path.dirname(
+        base_dir = "/app" if os.path.exists("/app") else os.path.dirname(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         skills_path = os.path.join(base_dir, "skills")
         logger.info(f"註冊官方技能路徑: {skills_path}")
