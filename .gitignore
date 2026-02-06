@@ -6,8 +6,6 @@ __pycache__/
 # 環境變數 (最重要！保護你的 Gemini Key)
 .env
 
-# uv 相關
-uv.lock
 
 # 資料庫與日誌
 *.log
