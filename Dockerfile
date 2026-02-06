@@ -29,4 +29,4 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 
 # 啟動指令：使用 uvicorn 確保非同步性能，並動態綁定 Railway 的 Port
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
