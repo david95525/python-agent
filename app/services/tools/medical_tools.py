@@ -50,7 +50,7 @@ async def search_device_manual(query: str) -> str:
 
         vector_store = PGVector(
             embeddings=embeddings,
-            connection=settings.database_url,
+            connection=settings.sqlalchemy_database_url,
             collection_name=collection_name,
         )
 

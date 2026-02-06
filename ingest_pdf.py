@@ -45,9 +45,7 @@ def run_ingest():
 
     try:
         # 建立連接與檢查表是否存在
-        sync_url = settings.database_url.replace("postgresql+psycopg",
-                                                 "postgresql")
-        engine = create_engine(sync_url)
+        engine = create_engine(settings.sqlalchemy_database_url)
 
         logger.info(f"正在檢查並清理舊資料...")
         with engine.connect() as conn:
@@ -97,7 +95,7 @@ def run_ingest():
             embedding=embeddings,
             documents=docs,
             collection_name=collection_name,
-            connection=settings.database_url,
+            connection=settings.sqlalchemy_database_url,
             use_jsonb=True,
         )
         logger.info(f"成功！全數資料已存入 Collection: {collection_name}")

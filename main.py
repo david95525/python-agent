@@ -32,7 +32,7 @@ async def chat_page():
 @app.get("/deep")
 async def deep_page():
     logger.info("進入 Deep Agent 研究區")
-    return FileResponse("static/deep_agent.html")
+    return FileResponse("static/deep.html")
 
 
 # 靜態檔案掛載

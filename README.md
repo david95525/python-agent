@@ -1,30 +1,30 @@
 ## Python AI Medical Agent (FastAPI + RAG + Skill Injection)
-這是一個基於 FastAPI 與 Gemini 2.5 Flash 構建的全功能 AI Agent 專案。本專案利用 Python 生態系強大的 AI 工具鏈，實現了一個具備私有知識庫 (RAG)、動態專業技能 (Skill Injection) 與歷史數據分析能力的智能醫療助手。
+這是一個基於 FastAPI 與 Gemini 2.5 Flash 構建的全功能 AI Agent 專案。本專案實現了私有知識庫 (RAG)、動態專業技能注入 (Skill Injection) 與生理數據分析能力，旨在提供符合醫療標準的智能輔助體驗。
 
 # 🚀 核心技術架構
-LLM 模型: Google Gemini 2.5 Flash (支援高效能 Tool Calling)。
+LLM 模型: Google Gemini 2.5 Flash (支援強大的原生 Tool Calling 與長文本推理)。
 
-後端框架: FastAPI (異步處理) + LangGraph (Agent 決策流)。
+後端框架: FastAPI (異步高併發處理) + LangChain/LangGraph (Agent 思考鏈)。
 
-向量資料庫: PostgreSQL + pgvector (支援語意搜尋)。
+向量資料庫: PostgreSQL + pgvector (在地化語意搜尋與向量存儲)。
 
-技能系統: 實作了 Skill Injection 機制，將專業領域規範（如 medical-expert.md）動態注入 System Prompt，確保 Agent 行為符合醫療倫理與專業標準。
+技能系統: 實作動態 Skill Injection 機制，將 skills/ 下的專業規範（如醫療倫理、輸出格式）動態注入 System Prompt。
 
-開發工具: uv (極速環境管理)、Docker (資料庫持久化)。
+部署管理: uv (Python 封裝與依賴管理) + Docker Compose (基礎設施一鍵啟動)。
 
 # 🛠️ 功能模組
 1. RAG 知識檢索 (search_device_manual)
-精準對接: 針對血壓計說明書進行 PDF 解析與向量化。
+針對血壓計說明書進行 PDF 解析、語意切片與向量化。
 
-容錯處理: 自動將簡單的錯誤代碼（如 ERR3）優化為結構化搜尋詞，提升檢索召回率。
+智慧對齊: 自動將用戶口語（如 "Err 3"）優化為結構化關鍵字，提升檢索精準度。
 
 2. 生理數據分析 (get_user_health_data)
-趨勢判讀: 支援獲取用戶歷史紀錄，並能計算平均值、識別異常波動。
+獲取用戶歷史健康紀錄，計算趨勢、平均值並識別異常波動。
 
-專業對照: 結合說明書標準（如 135/85 mmHg 警戒線）提供健康建議。
+對照說明書醫學標準（如 135/85 mmHg）提供衛教建議。
 
 3. 動態技能注入 (get_skill_content)
-內人格設定: 透過讀取 skills/ 目錄下的 Markdown 檔案，將專業指引（任務指令、輸出規範、免責聲明）直接注入 Agent 意識層。
+人格設定: 讀取 skills/*.md 檔案，確保 Agent 行為符合「專業、嚴謹、具備免責聲明」的規範。
 
 # 快速開始
 1. 環境準備
@@ -32,52 +32,56 @@ LLM 模型: Google Gemini 2.5 Flash (支援高效能 Tool Calling)。
 程式碼片段
 ```
 PORT=8000
-ENVIRONMENT=development
-GEMINI_API_KEY=key
-DATABASE_URL=postgresql+psycopg://postgres:password@localhost:5432/postgres
+ENVIRONMENT=production
+GEMINI_API_KEY=你的Gemini金鑰
+# 注意：在 Docker 內部連線時，主機名應為 db
+DATABASE_URL=postgresql+psycopg://postgres:你的密碼@db:5432/postgres
+DB_USER=postgres
+DB_PASSWORD=你的密碼
+DB_NAME=postgres
 ```
 
-2. 安裝與執行
+2. 使用 Docker Compose 一鍵部署 (推薦)
+本專案已完成容器化配置，解決了 Windows 權限與網路監聽問題：
+```
+# 建置鏡像並啟動服務 (自動包含 pgvector 與 FastAPI)
+docker compose up -d --build
+
+# (選配) 第一次執行時手動檢查擴充功能是否存在
+docker compose exec db psql -U postgres -c "CREATE EXTENSION IF NOT EXISTS vector;"
+
+# 導入測試資料 (PDF 向量化)
+# 程式會自動檢查表是否存在並初始化 pgvector
+docker compose exec agent python ingest_pdf.py
+```
+
+3. 安裝與執行
 使用 uv 快速安裝環境：
-
-PowerShell
-
-# 同步環境與依賴
+```
+# 安裝依賴
 uv sync
 
-# 啟動帶有持久化磁碟卷的資料庫 (Docker)
-```
-# 建立卷並啟動 pgvector
-docker volume create pg_vector_data
-docker run --name pgvector -e POSTGRES_PASSWORD=你的密碼 -p 5432:5432 -v pg_vector_data:/var/lib/postgresql/data -d ankane/pgvector
-# 啟用擴充
-docker exec -it pgvector psql -U postgres -c "CREATE EXTENSION IF NOT EXISTS vector;"
-```
-# 導入測試資料 (PDF)
-```
-uuv run python ingest_pdf.py  # 匯入說明書
-```
-# 啟動開發伺服器
-```
-uv sync
-uv run fastapi dev main.py           # 啟動服務
+# 啟動開發伺服器 (監聽 0.0.0.0 確保 Docker/外部可連線)
+uv run fastapi dev main.py --host 0.0.0.0
 ```
 
 # 📝 測試案例
 測試場景	詢問範例	預期 Agent 行為
-私有知識	"ERR3 是什麼意思？"	執行 search_device_manual，回答「壓脈帶漏氣」。
-數據分析	"分析我 2025 年底的血壓。"	執行 get_user_health_data，對比年初數據並給予建議。
-邊界防禦	"今天台北天氣如何？"	根據 medical-expert 規範，禮貌拒絕回答非專業領域問題。
-法律免責	(任何健康建議後)	自動附加「本建議僅供參考，不具醫療診斷效力。」
+私有知識	"Err 3 是什麼意思？"	檢索 PDF，回答「壓脈帶充氣錯誤」並提供排除步驟。
+數據分析	"分析我最近的血壓趨勢。"	調用數據工具，對比數值並給予健康判讀。
+邊界防禦	"推薦今天的股票。"	觸發 Medical-Expert 規範，禮貌拒絕回答醫療以外問題。
+法律免責	(任何建議後)	自動附加「本建議僅供參考，不具醫療診斷效力。」
 
 # 專案結構
 
-app/services/tools/: 核心工具集（RAG、數據分析、系統技能載入）。
+app/services/tools/: 核心工具集（RAG 檢索、數據查詢、技能加載）。
 
-skills/: 存放各種專業領域的行為準則 (medical-expert.md)。
+skills/: 存放 Markdown 格式的行為準則與人格設定。
 
-data/: 存放原始 PDF 說明書。
+data/: 存放原始 PDF 醫療器材說明書。
 
-ingest_pdf.py: 資料匯入與資料庫向量化維護腳本。
+static/: 前端研究室介面 (index.html, chat.html)。
 
-main.py: FastAPI 啟動入口。
+ingest_pdf.py: 自動化資料清洗、切片與向量化存儲腳本。
+
+docker-compose.yml: 定義服務拓撲與 Named Volumes 持久化配置。

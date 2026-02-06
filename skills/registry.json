@@ -9,6 +9,11 @@
       "id": "health_analyst",
       "description": "健康數據分析師，處理血壓趨勢、心率異常判斷與健康報告解讀。",
       "file": "health_analyst.md"
+    },
+    {
+      "id": "financial_expert",
+      "description": "首席金融分析師，處理股票代號分析、市場新聞解讀、投資風險評估與深度研究報告。",
+      "file": "financial_expert/SKILL.md"
     }
   ]
 }
