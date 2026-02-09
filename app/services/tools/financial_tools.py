@@ -21,7 +21,7 @@ def get_market_news(query: str) -> str:
         ddgs = DDGS(timeout=10)
 
         # 轉換為 list 前先確保有拿到 generator
-        results = list(ddgs.text(search_query, max_results=5))
+        results = list(ddgs.text(search_query, region="tw-tzh", max_results=5))
 
         if not results:
             return f"找不到關於 {query} 的相關新聞。"

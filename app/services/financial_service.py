@@ -56,15 +56,17 @@ class FinancialAgentService(BaseAgent):
         return graph
 
     async def node_market_research(self, state):
-        #"""研究節點：負責收集數據"""
+        #研究節點：負責收集數據
         symbol = state["symbol"]
         logger.info(f"[Financial Agent] 正在研究: {symbol}")
-
-        # 抓取股價 (呼叫 Tool)
-        price_info = get_stock_price.invoke({"symbol": symbol})
-
-        # 抓取新聞 (呼叫 Tool)
-        news_info = get_market_news.invoke({"query": symbol})
+        # 格式校正：如果是 4 位數字，自動補後綴
+        search_symbol = symbol
+        if symbol.isdigit() and len(symbol) == 4:
+            search_symbol = f"{symbol}.TW"
+        search_query = f"{symbol} 股票 財經新聞"
+        # 執行工具
+        price_info = get_stock_price.invoke({"symbol": search_symbol})
+        news_info = get_market_news.invoke({"query": search_query})
 
         # 彙整原始數據存入狀態
         combined_data = f"【股價數據】\n{price_info}\n\n【市場新聞】\n{news_info}"
