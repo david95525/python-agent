@@ -62,23 +62,23 @@ class MedicalAgentService(BaseAgent):
     def _build_workflow(self):
         graph = StateGraph(AgentState)
 
-        # 定義節點 (Nodes)
+        # 定義節點 (保持不變)
         graph.add_node("router", self.node_router)
         graph.add_node("device_expert", self.node_device_expert)
         graph.add_node("health_analyst", self.node_health_analyst)
         graph.add_node("emergency_advice", self.node_emergency_advice)
         graph.add_node("general_assistant", self.node_general_assistant)
 
-        # 定義邊與條件 (Edges & Conditional Edges)
         graph.add_edge(START, "router")
 
         # 根據 router 的意圖決定去向
         graph.add_conditional_edges(
             "router", lambda state: state["intent"], {
-                "device": "device_expert",
-                "health": "health_analyst",
+                "device_expert": "device_expert",
+                "health_analyst": "health_analyst",
                 "general": "general_assistant"
             })
+
         # 健康分析完後，判斷是否需要「緊急建議」
         graph.add_conditional_edges(
             "health_analyst", lambda state: "emergency"
@@ -86,7 +86,6 @@ class MedicalAgentService(BaseAgent):
                 "emergency": "emergency_advice",
                 "normal": END
             })
-        # 專家處理完後全部指向結束
         graph.add_edge("device_expert", END)
         graph.add_edge("emergency_advice", END)
         graph.add_edge("general_assistant", END)
