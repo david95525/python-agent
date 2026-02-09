@@ -28,39 +28,51 @@ financial_agent = FinancialAgentService()
 
 @router.post("/chat")
 async def chat(request: ChatRequest):
-    #   記錄請求進入與原始資料
     start_time = time.time()
     logger.info(f"[Request] 收到聊天請求 - User: {request.userId}")
-    logger.debug(f"[Payload] Message: {request.message}")
 
     try:
         # 呼叫後端服務
         result_data = await medical_service.handle_chat(
             request.userId, request.message)
 
-        # 計算處理耗時
+        # --- 關鍵防禦機制：檢查 result_data 是否為字典 ---
+        if isinstance(result_data, str):
+            # 如果 Service 因為 Exception 回傳了字串，轉化為 error 結構
+            logger.warning(f"[Service Warning] 收到非結構化回覆: {result_data}")
+            return {
+                "status": "error",
+                "message": result_data,
+                "data": {
+                    "text": result_data,
+                    "intent": "error",
+                    "graph": ""
+                }
+            }
+
         process_time = time.time() - start_time
 
-        # 記錄處理結果 (使用 DEBUG 記錄複雜的 Graph)
+        # 安全地使用 .get()，提供預設值
+        intent = result_data.get('intent', 'unknown')
+        text = result_data.get('text', '無回覆內容')
+        graph = result_data.get('graph', '')
+
         logger.info(
-            f"[Response] 處理成功 - Intent: {result_data.get('intent')} | 耗時: {process_time:.2f}s"
-        )
-        logger.debug(
-            f"[Graph Data] Mermaid 長度: {len(result_data.get('graph', ''))}")
+            f"[Response] 處理成功 - Intent: {intent} | 耗時: {process_time:.2f}s")
 
         return {
             "status": "success",
             "data": {
-                "text": result_data["text"],
-                "graph": result_data["graph"],
-                "intent": result_data["intent"]
+                "text": text,
+                "graph": graph,
+                "intent": intent
             }
         }
 
     except Exception as e:
-        # 錯誤處理：一定要包含 exc_info 以便追蹤堆疊
         logger.error(f"[API Error] 處理失敗: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Agent 內部執行錯誤，請檢查伺服器日誌。")
+        # 即使發生最嚴重的崩潰，也回傳 JSON 格式而非直接拋出 HTTPException（視前端需求而定）
+        return {"status": "error", "message": "Agent 內部執行錯誤，請檢查伺服器日誌。"}
 
 
 @router.post("/deep-research/invest/manual")

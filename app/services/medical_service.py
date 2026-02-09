@@ -28,6 +28,7 @@ class AgentState(TypedDict):
 class MedicalAgentService(BaseAgent):
 
     def __init__(self):
+        super().__init__("MedicalService")
         # 載入註冊表 (Registry)
         self.skills_registry = self._load_registry()
         # 構建生產線 (Graph)
