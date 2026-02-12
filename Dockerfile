@@ -9,7 +9,16 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     libpq-dev \
     gcc \
+    # 新增以下依賴，確保 matplotlib 能正常渲染圖片
+    libpng-dev \
+    libfreetype6-dev \
+    # 選配：如果你要在圖表顯示中文，通常需要安裝字體
+    fonts-noto-cjk \
+    fontconfig \
     && rm -rf /var/lib/apt/lists/*
+
+# 更新系統字體快取
+RUN fc-cache -fv
 
 # 複製依賴文件
 COPY pyproject.toml uv.lock ./

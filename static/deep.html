@@ -4,30 +4,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Deep Agent 決策- 投資對比</title>
+    <title>Deep Agent 決策 - 投資對比</title>
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        .thought-trace {
-            font-family: 'Courier New', Courier, monospace;
-        }
 
-        .pulse-loader {
-            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-
-        @keyframes pulse {
-
-            0%,
-            100% {
-                opacity: 1;
-            }
-
-            50% {
-                opacity: .5;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="/static/css/deep.css">
 </head>
 
 <body class="bg-gray-900 text-gray-100 min-h-screen">
@@ -39,7 +21,7 @@
             <div class="flex gap-4">
                 <input id="symbolInput" type="text" placeholder="輸入股票代號 (e.g. AAPL, 2330.TW)"
                     class="bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 w-64 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <button onclick="runExperiment()"
+                <button id="startBtn"
                     class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg transition font-semibold">
                     開始深度分析
                 </button>
@@ -49,7 +31,6 @@
 
     <main class="container mx-auto p-6">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-
             <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
                 <div class="p-4 bg-gray-750 border-b border-gray-700 flex justify-between items-center">
                     <span class="font-bold text-blue-400"><i class="fas fa-project-diagram mr-2"></i>手動 LangGraph
@@ -59,152 +40,31 @@
                 <div class="p-6">
                     <div id="manualThought"
                         class="thought-trace text-sm text-blue-300 mb-4 h-24 overflow-y-auto bg-black p-3 rounded">
-                        // 推理路徑追蹤...
                     </div>
                     <div id="manualResult" class="prose prose-invert max-w-none text-gray-300 min-h-[400px]">
-                        點擊「開始」後，Agent 將按預設節點 (Researcher -> Analyst -> Decision) 執行。
+                        點擊「開始」後，Agent 將按預設節點執行。
                     </div>
                 </div>
             </div>
 
             <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
                 <div class="p-4 bg-gray-750 border-b border-gray-700 flex justify-between items-center">
-                    <span class="font-bold text-emerald-400"><i class="fas fa-brain mr-2"></i>官方 DeepAgents
-                        (規劃模式)</span>
+                    <span class="font-bold text-emerald-400"><i class="fas fa-brain mr-2"></i>官方 DeepAgents</span>
                     <span id="officialStatus" class="text-xs text-gray-400">等待指令...</span>
                 </div>
                 <div class="p-6">
                     <div id="officialThought"
                         class="thought-trace text-sm text-emerald-300 mb-4 h-24 overflow-y-auto bg-black p-3 rounded">
-                        // 自我規劃 (TODO List) 追蹤...
                     </div>
                     <div id="officialResult" class="prose prose-invert max-w-none text-gray-300 min-h-[400px]">
-                        官方封裝將自動拆解任務、分配子代理並自我反思。
+                        官方封裝將自動拆解任務。
                     </div>
                 </div>
             </div>
-
         </div>
     </main>
 
-    <script>
-        async function runExperiment() {
-            const symbol = document.getElementById('symbolInput').value;
-            if (!symbol) return alert("請輸入標的代號");
-
-            // 重置介面
-            resetUI();
-
-            // 同時呼叫兩個 API
-            fetchManual(symbol);
-            fetchOfficial(symbol);
-        }
-
-        function resetUI() {
-            document.getElementById('manualResult').innerHTML = '<div class="pulse-loader text-center py-20"><i class="fas fa-spinner fa-spin text-4xl mb-4"></i><p>正在按流程圖節點執行中...</p></div>';
-            document.getElementById('officialResult').innerHTML = '<div class="pulse-loader text-center py-20"><i class="fas fa-brain fa-spin text-4xl mb-4"></i><p>正在自動規劃與推理中...</p></div>';
-            document.getElementById('manualThought').innerHTML = "";
-            document.getElementById('officialThought').innerHTML = "";
-        }
-
-        async function fetchManual(symbol) {
-            const status = document.getElementById('manualStatus');
-            const thought = document.getElementById('manualThought');
-            const resultArea = document.getElementById('manualResult');
-
-            thought.innerHTML += "> [START] 進入 Router 節點\n";
-            thought.innerHTML += "> [NODE] 啟動市場研究節點 (yfinance)... \n";
-
-            try {
-                const response = await fetch('/api/v1/deep-research/invest/manual', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ symbol: symbol })
-                });
-
-                // 解析後端傳回的 JSON
-                const jsonResponse = await response.json();
-                console.log("Manual API Response:", jsonResponse);
-
-                // 關鍵路徑修正：
-                // 你的後端回傳結構是 { status: "success", data: { final_response: "...", data_raw: "..." } }
-                const resData = jsonResponse.data;
-
-                if (resData) {
-                    thought.innerHTML += "> [NODE] 風險評估完成\n";
-                    thought.innerHTML += "> [END] 產出報告\n";
-                    status.innerText = "完成";
-
-                    // 組合顯示內容
-                    const rawDataHtml = `<div class='bg-gray-900 p-4 rounded mb-4 text-xs font-mono text-blue-300 overflow-x-auto'>${resData.data_raw}</div>`;
-                    const reportHtml = `<div class='prose prose-invert max-w-none'>${resData.final_response.replace(/\n/g, '<br>')}</div>`;
-
-                    resultArea.innerHTML = rawDataHtml + reportHtml;
-                } else {
-                    throw new Error("後端回傳格式不符合預期");
-                }
-
-            } catch (e) {
-                console.error("Manual Fetch Error:", e);
-                status.innerText = "出錯";
-                resultArea.innerHTML = `<span class="text-red-400">系統錯誤: ${e.message}</span>`;
-            }
-        }
-
-        async function fetchOfficial(symbol) {
-            const status = document.getElementById('officialStatus');
-            const thought = document.getElementById('officialThought');
-            const resultArea = document.getElementById('officialResult');
-
-            thought.innerHTML += "> [PLANNING] 正在啟動官方自主代理 (DeepAgents)...\n";
-
-            try {
-                const response = await fetch('/api/v1/deep-research/invest/official', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ symbol: symbol })
-                });
-
-                if (!response.ok) throw new Error(`HTTP 錯誤! 狀態碼: ${response.status}`);
-
-                const jsonResponse = await response.json();
-                console.log("Official API Response:", jsonResponse);
-
-                // --- 核心應對邏輯：層層檢查 ---
-                let content = "";
-                const finalResponse = jsonResponse?.result?.final_response;
-
-                if (Array.isArray(finalResponse) && finalResponse.length > 0 && finalResponse[0].text) {
-                    // 狀況 A: 正常拿到資料
-                    content = finalResponse[0].text;
-
-                    // 額外檢查：如果 AI 回傳太短 (例如只回了「無」)
-                    if (content.trim().length < 5) {
-                        content = "⚠️ AI 回傳內容過於簡短，可能因數據源受限無法分析該標的。";
-                    }
-                } else if (jsonResponse?.error) {
-                    // 狀況 B: 後端有傳回明確錯誤訊息
-                    content = `❌ 系統錯誤: ${jsonResponse.error}`;
-                } else {
-                    // 狀況 C: 完全沒資料 (Null 或空陣列)
-                    content = "⚠️ 官方代理未回傳具體分析，可能該標的 (Symbol) 暫無即時行情或新聞。";
-                }
-
-                thought.innerHTML += "> [SUB-AGENT] 任務完成\n";
-                status.innerText = content.includes("⚠️") || content.includes("❌") ? "異常" : "完成";
-
-                // 渲染 (加入簡單的粗體處理讓報告好看點)
-                resultArea.innerHTML = content
-                    .replace(/\n/g, '<br>')
-                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-
-            } catch (e) {
-                console.error("Official Fetch Error:", e);
-                status.innerText = "網路錯誤";
-                resultArea.innerHTML = `<span class="text-red-400">無法連線至服務: ${e.message}</span>`;
-            }
-        }
-    </script>
+    <script src="/static/js/deep.js"></script>
 </body>
 
 </html>

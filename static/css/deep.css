@@ -1,0 +1,38 @@
+/* Deep Research 專屬樣式 */
+
+.thought-trace {
+    font-family: 'Courier New', Courier, monospace;
+}
+
+/* 脈衝讀取動畫 */
+.pulse-loader {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: .5;
+    }
+}
+
+/* 捲軸樣式優化 (針對推理過程黑視窗) */
+.thought-trace::-webkit-scrollbar {
+    width: 4px;
+}
+
+.thought-trace::-webkit-scrollbar-thumb {
+    background: #4a5568;
+    border-radius: 10px;
+}
+
+/* Markdown 文字強化 */
+.prose strong {
+    color: #63b3ed;
+    /* 藍色高亮 */
+}

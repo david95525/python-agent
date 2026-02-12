@@ -1,0 +1,205 @@
+:root {
+    --primary-color: #007bff;
+    --bg-color: #f4f7f6;
+    --user-bubble: #007bff;
+    --agent-bubble: #ffffff;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: var(--bg-color);
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    gap: 20px;
+    /* 為看板留出間距 */
+}
+
+/* 聊天主容器 */
+.chat-container {
+    width: 100%;
+    max-width: 450px;
+    height: 85vh;
+    background: white;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    border-radius: 15px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* 研究看板：顯示流程圖 */
+.research-board {
+    width: 500px;
+    /* 強制固定寬度 */
+    height: 800px;
+    /* 強制固定高度 */
+    background: white;
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    /* 避免內容溢出看板 */
+}
+
+#graph-container {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    /* 填滿看板剩下的空間 */
+    overflow: auto;
+    /* 關鍵：內容超過 500x850 時顯示捲軸 */
+    border: 1px inset #f0f0f0;
+    border-radius: 8px;
+    background: #fafafa;
+}
+
+.board-header {
+    font-weight: bold;
+    color: #555;
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+}
+
+/* Mermaid 渲染區域 */
+#mermaid-graph {
+    display: block;
+    width: 100%;
+    margin: 0 auto;
+    /* 確保初始文字在渲染前是隱藏的，避免閃爍 */
+    min-height: 200px;
+}
+
+.mermaid svg {
+    /* 讓 SVG 依照內容寬度撐開，但寬度至少 100% */
+    min-width: 450px;
+    width: 100% !important;
+    max-height: 700px;
+}
+
+/* 聊天內容區 */
+.chat-header {
+    background: var(--primary-color);
+    color: white;
+    padding: 15px 20px;
+    font-weight: bold;
+}
+
+#chat-box {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    background: #f8f9fa;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+/* 氣泡樣式與之前相同... */
+.msg {
+    max-width: 80%;
+    padding: 10px 15px;
+    border-radius: 18px;
+    font-size: 0.95em;
+    line-height: 1.4;
+}
+
+.user-msg {
+    align-self: flex-end;
+    background-color: var(--user-bubble);
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+
+.agent-msg {
+    align-self: flex-start;
+    background-color: var(--agent-bubble);
+    color: #333;
+    border: 1px solid #eee;
+    border-bottom-left-radius: 4px;
+}
+
+/* 高亮 Mermaid 節點的 CSS */
+.activeNode>rect {
+    fill: #ffcc00 !important;
+    stroke: #ff9900 !important;
+    stroke-width: 3px !important;
+}
+
+.input-area {
+    padding: 15px;
+    display: flex;
+    gap: 10px;
+    background: white;
+    border-top: 1px solid #eee;
+}
+
+#userInput {
+    flex: 1;
+    padding: 10px 15px;
+    border: 1px solid #ddd;
+    border-radius: 25px;
+    outline: none;
+}
+
+button {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 8px 18px;
+    border-radius: 20px;
+    cursor: pointer;
+}
+
+.activeEmergencyNode>rect {
+    fill: #ff4d4d !important;
+    stroke: #b30000 !important;
+}
+
+/* 讓訊息中的圖片撐滿 */
+.agent-msg img {
+    max-width: 100%;
+    height: auto;
+    cursor: zoom-in;
+    /* 提示使用者可以點擊 */
+    border: 1px solid #ddd;
+    transition: transform 0.2s;
+}
+
+/* 簡單的點擊放大效果 */
+.agent-msg img:active {
+    transform: scale(1.5);
+    z-index: 999;
+    position: relative;
+}
+
+/* 下載按鈕樣式優化 */
+.download-btn {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    margin-top: 8px;
+    cursor: pointer;
+    transition: background 0.3s;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.download-btn:hover {
+    background: #218838;
+}
+
+.chart-container-inner {
+    background: #ffffff;
+    padding: 10px;
+    border-radius: 12px;
+    margin: 10px 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}

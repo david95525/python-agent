@@ -1,4 +1,5 @@
 import os
+import re
 from typing import List, Dict, Annotated, TypedDict, Literal
 import operator
 import json
@@ -7,7 +8,11 @@ from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 
 from app.services.base import BaseAgent
 from app.services.tools.system_tools import load_specialized_skill
-from app.services.tools.medical_tools import search_device_manual, get_user_health_data
+from app.services.tools.medical_tools import (
+    search_device_manual,
+    get_user_health_data,
+    plot_health_chart,
+)
 
 from app.utils.logger import setup_logger
 
@@ -19,7 +24,7 @@ class AgentState(TypedDict):
     user_id: str
     input_message: str
     messages: Annotated[List[BaseMessage], operator.add]  # 累加對話歷史
-    intent: Literal["device", "health", "general"]  # 路由意圖
+    intent: Literal["device", "health", "general", "visualizer"]  # 路由意圖
     is_emergency: bool  # 新增：用於判斷是否觸發緊急狀態
     context_data: str  # 工具抓取的原始數據
     final_response: str  # 最終產出的回覆
@@ -45,7 +50,8 @@ class MedicalAgentService(BaseAgent):
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 logger.info(
-                    f"[System] 技能註冊表載入成功，共 {len(data.get('skills', []))}個專業模組")
+                    f"[System] 技能註冊表載入成功，共 {len(data.get('skills', []))}個專業模組"
+                )
                 return data
         except Exception as e:
             logger.error(f"[System] 無法載入註冊表，請檢查路徑或格式: {e}")
@@ -68,82 +74,130 @@ class MedicalAgentService(BaseAgent):
         graph.add_node("health_analyst", self.node_health_analyst)
         graph.add_node("emergency_advice", self.node_emergency_advice)
         graph.add_node("general_assistant", self.node_general_assistant)
+        graph.add_node("visualizer", self.node_visualizer)
 
         graph.add_edge(START, "router")
 
         # 根據 router 的意圖決定去向
         graph.add_conditional_edges(
-            "router", lambda state: state["intent"], {
+            "router",
+            lambda state: state["intent"],
+            {
                 "device_expert": "device_expert",
                 "health_analyst": "health_analyst",
-                "general": "general_assistant"
-            })
+                "visualizer": "visualizer",
+                "general": "general_assistant",
+            },
+        )
+
+        def route_after_analysis(state: AgentState):
+            # 優先檢查緊急狀態
+            if state.get("is_emergency"):
+                return "emergency"
+            # 檢查使用者原始輸入是否有繪圖關鍵字
+            keywords = ["圖", "畫", "chart", "plot", "visualize"]
+            if any(k in state["input_message"].lower() for k in keywords):
+                return "visualize"
+            return "end"
 
         # 健康分析完後，判斷是否需要「緊急建議」
         graph.add_conditional_edges(
-            "health_analyst", lambda state: "emergency"
-            if state.get("is_emergency") else "normal", {
-                "emergency": "emergency_advice",
-                "normal": END
-            })
+            "health_analyst",
+            route_after_analysis,
+            {"emergency": "emergency_advice", "visualize": "visualizer", "end": END},
+        )
         graph.add_edge("device_expert", END)
         graph.add_edge("emergency_advice", END)
         graph.add_edge("general_assistant", END)
+        graph.add_edge("visualizer", END)
 
         return graph
 
     async def node_router(self, state: AgentState):
-        """意圖路由：改為非同步並強化穩定性"""
-        # 動態生成 Manifest
+        """意圖路由：加入上下文參考，防止簡短回覆被誤判"""
         manifest = self._get_manifest_for_prompt()
-        prompt = ("你是一個專業的任務分發中心。請根據以下技能模組的描述，判斷用戶訊息最適合交給哪位專家處理：\n\n"
-                  f"{manifest}\n\n"
-                  f"用戶訊息：{state['input_message']}\n\n"
-                  "【指令】請僅回傳上述清單中對應的「標籤名稱」（ID），若不屬於任何專業領域則回傳 'general'。"
-                  "嚴禁回傳標籤以外的任何解釋或標點符號。")
+        # 取最後一則 AI 的訊息，用以判斷上下文
+        last_ai_message = ""
+        if state.get("messages"):
+            for m in reversed(state["messages"]):
+                if isinstance(m, AIMessage):
+                    last_ai_message = m.content
+                    break
+        # [第一層保險] 硬編碼規則：如果 AI 剛問完要不要畫圖，且用戶說「好」
+        confirm_keywords = ["好", "要", "畫", "ok", "yes", "確認", "畫吧", "顯示"]
+        is_asking_to_plot = "繪製趨勢分析圖表嗎" in last_ai_message
+        user_input_clean = state["input_message"].strip().lower()
+
+        if is_asking_to_plot and any(k in user_input_clean for k in confirm_keywords):
+            logger.info("[Router Decision] 觸發上下文攔截規則: 導向 visualizer")
+            return {"intent": "visualizer"}
+        # 3. [第二層保險] LLM 判斷
+        prompt = (
+            "你是一個專業的任務分發中心。請根據對話歷史與用戶訊息判斷意圖：\n\n"
+            f"【技能清單】\n{manifest}\n"
+            "- 'visualizer': 當用戶明確要求繪圖，或同意 AI 之前的繪圖建議時使用。\n\n"  # 強制加入 visualizer 說明
+            f"【最後一則 AI 回覆】\n{last_ai_message}\n\n"
+            f"【用戶當前訊息】\n{state['input_message']}\n\n"
+            "【關鍵判定規則】\n"
+            "1. 如果 AI 上一則訊息詢問了『是否繪製圖表』，且用戶回答肯定，請務必回傳 'visualizer'。\n"
+            "2. 如果用戶詢問設備故障、說明書資訊，請回傳 'device_expert'。\n"
+            "3. 如果用戶提供數據要求分析，請回傳 'health_analyst'。\n"
+            "4. 否則回傳 'general'。\n\n"
+            "【指令】僅回傳標籤名稱 ID，嚴禁任何解釋。"
+        )
+
         res = await self.llm.ainvoke(prompt)
         intent_text = res.content.strip().lower()
         raw_intent = intent_text.replace(".", "").replace("'", "")
-        # 檢查是否存在於註冊表中，若無則歸類為 general
-        all_ids = [s["id"] for s in self.skills_registry.get("skills", [])]
+
+        # 驗證 ID 合法性 (包含手動加入的 visualizer)
+        valid_ids = [s["id"] for s in self.skills_registry.get("skills", [])]
+        valid_ids.extend(["visualizer", "general"])
+
         final_intent = "general"
-        for valid_id in all_ids:
-            if valid_id in raw_intent:
-                final_intent = valid_id
-                break
+        # 依照長度排序，優先匹配較長的 ID (例如 health_analyst 優於 health)
+        sorted_ids = sorted(valid_ids, key=len, reverse=True)
+
+        for vid in sorted_ids:
+            if vid.lower() in raw_intent:
+                final_intent = vid
+                break  # <--- 只有匹配成功才跳出迴圈
+
         logger.info(
-            f"[Router Decision] 識別意圖: {final_intent} (原始回覆: {intent_text})")
+            f"[Router Decision] 識別意圖: {final_intent} (原始回覆: {intent_text})"
+        )
         return {"intent": final_intent}
 
     async def node_device_expert(self, state: AgentState):
         """硬體專家節點：專注於 RAG 檢索"""
         # 動態加載Skills
-        skill_content = load_specialized_skill.invoke(
-            {"skill_name": "device_expert"})
+        skill_content = load_specialized_skill.invoke({"skill_name": "device_expert"})
         # 執行 RAG
-        raw_info = await search_device_manual.ainvoke(
-            {"query": state["input_message"]})
+        raw_info = await search_device_manual.ainvoke({"query": state["input_message"]})
         logger.info(f"[RAG] 檢索完成，獲取資料長度: {len(raw_info)} 字元")
-        prompt = (f"### 專業執行細則 ###\n{skill_content}\n\n"
-                  f"### 檢索到的說明書資訊 ###\n{raw_info}\n\n"
-                  f"請根據上述規範回答用戶：{state['input_message']}")
+        prompt = (
+            f"### 專業執行細則 ###\n{skill_content}\n\n"
+            f"### 檢索到的說明書資訊 ###\n{raw_info}\n\n"
+            f"請根據上述規範回答用戶：{state['input_message']}"
+        )
         res = await self.llm.ainvoke(prompt)
         return {"final_response": res.content}
 
     async def node_health_analyst(self, state: AgentState):
         """健康分析師節點：專注於數據處理"""
         # 動態加載Skills
-        skill_info = load_specialized_skill.invoke(
-            {"skill_name": "health_analyst"})
+        skill_info = load_specialized_skill.invoke({"skill_name": "health_analyst"})
         # 調用工具獲取血壓數據
         raw_data = get_user_health_data.invoke({"user_id": state["user_id"]})
 
-        prompt = (f"### 專業規範 ###\n{skill_info}\n\n"
-                  f"### 真實數據 ###\n{raw_data}\n\n"
-                  f"### 用戶當前描述 ###\n{state['input_message']}\n\n"
-                  "1. 請結合歷史數據與『用戶當前描述的數值』進行綜合分析。\n"
-                  "2. 請根據規範分析數據。若出現任何一項『異常』(BP, SpO2, Temp)，"
-                  "請在文末標註 [EMERGENCY]，否則標註 [NORMAL]。")
+        prompt = (
+            f"### 專業規範 ###\n{skill_info}\n\n"
+            f"### 真實數據 ###\n{raw_data}\n\n"
+            f"### 用戶當前描述 ###\n{state['input_message']}\n\n"
+            "1. 請結合歷史數據與『用戶當前描述的數值』進行綜合分析。\n"
+            "2. 請根據規範分析數據。若出現任何一項『異常』(BP, SpO2, Temp)，"
+            "請在文末標註 [EMERGENCY]，否則標註 [NORMAL]。"
+        )
 
         res = await self.llm.ainvoke(prompt)
 
@@ -153,23 +207,69 @@ class MedicalAgentService(BaseAgent):
         logger.debug(f"[LLM Raw] 分析師回覆原文: {res.content}")
         is_emergency = "[EMERGENCY]" in res.content
         logger.info(f"[Risk Analysis] 是否觸發緊急狀態: {is_emergency}")
-        clean_content = res.content.replace("[EMERGENCY]",
-                                            "").replace("[NORMAL]", "")
+        clean_content = res.content.replace("[EMERGENCY]", "").replace("[NORMAL]", "")
         if can_visualize:
-            clean_content += ("\n\n💡 **系統偵測到數據量充足，需要我為您繪製趨勢分析圖表嗎？**")
-        return {"final_response": clean_content, "is_emergency": is_emergency}
+            clean_content += (
+                "\n\n💡 **系統偵測到數據量充足，需要我為您繪製趨勢分析圖表嗎？**"
+            )
+        return {
+            "final_response": clean_content,
+            "is_emergency": is_emergency,
+            "context_data": raw_data,
+        }
 
     async def node_emergency_advice(self, state: AgentState):
         """緊急建議節點：臨床指引模式"""
-        prompt = ("### 臨床風險警示 ###\n"
-                  "當前檢測到用戶血壓數據已達臨床警戒水位。\n"
-                  "請提供標準化的醫學建議：\n"
-                  "1. 建議用戶保持平靜，靜坐 15 分鐘後重新測量。\n"
-                  "2. 若伴隨頭痛、胸痛等症狀，建議立即尋求專業醫療協助或撥打緊急電話。")
+        prompt = (
+            "### 臨床風險警示 ###\n"
+            "當前檢測到用戶血壓數據已達臨床警戒水位。\n"
+            "請提供標準化的醫學建議：\n"
+            "1. 建議用戶保持平靜，靜坐 15 分鐘後重新測量。\n"
+            "2. 若伴隨頭痛、胸痛等症狀，建議立即尋求專業醫療協助或撥打緊急電話。"
+        )
         res = await self.llm.ainvoke(prompt)
         combined = f"{state['final_response']}\n\n--- ⚠️ 系統臨床建議 ---\n{res.content}"
 
         return {"final_response": combined}
+
+    async def node_visualizer(self, state: AgentState):
+        """繪圖專家節點：調用工具產出圖表"""
+        # 取得數據（從 node_health_analyst 之前存好的 raw_data 或重新獲取）
+        raw_data = state.get("context_data")
+        if not raw_data:
+            raw_data = get_user_health_data.invoke({"user_id": state["user_id"]})
+            logger.warning(
+                f"[Visualizer] State 中無數據，已重新抓取用戶 {state['user_id']} 數據"
+            )
+
+        # 讓 LLM 決定參數（例如判斷用戶要 bar 還是 line）
+        visualizer_instruction = (
+            "你現在是『數據視覺化專家』。請根據用戶要求，從 ['line', 'bar', 'scatter'] 中挑選最適合的 chart_type。\n"
+            "- 趨勢/隨意要求：line\n"
+            "- 對比/比較數值：bar\n"
+            "- 離散程度/大量點：scatter\n"
+            "請僅回傳工具調用所需的參數。"
+        )
+        type_res = await self.llm.ainvoke(visualizer_instruction)
+        # 調用工具
+        selected_type = "line"
+        content = type_res.content.lower()
+        if "bar" in content or "長條" in content:
+            selected_type = "bar"
+        if "scatter" in content or "散佈" in content:
+            selected_type = "scatter"
+        # 執行繪圖工具
+        chart_base64 = plot_health_chart.invoke(
+            {
+                "data": raw_data,
+                "title": f"用戶 {state['user_id']} 健康數據趨勢",
+                "chart_type": selected_type,
+            }
+        )
+        # 封裝回傳
+        final_text = f"📊 **已為您生成{selected_type}趨勢圖表**：\n\n![Health Chart]({chart_base64})"
+
+        return {"final_response": final_text}
 
     async def node_general_assistant(self, state: AgentState):
         """通用節點：處理範疇外問題"""
@@ -189,11 +289,14 @@ class MedicalAgentService(BaseAgent):
             "user_id": user_id,
             "input_message": message,
             "messages": history + [HumanMessage(content=message)],
+            "context_data": "",
         }
         try:
             # 啟動 LangGraph 生產線
-            final_state = await self.app.ainvoke(initial_state)
+            config = {"configurable": {"thread_id": user_id}}
+            final_state = await self.app.ainvoke(initial_state, config=config)
             final_text = final_state["final_response"]
+            intent = final_state.get("intent", "general")
             mermaid_graph = self.app.get_graph().draw_mermaid()
             if final_state.get("is_emergency"):
                 mermaid_graph += "\nclass emergency_advice activeEmergencyNode"
@@ -207,23 +310,32 @@ class MedicalAgentService(BaseAgent):
             response_data = {
                 "text": final_text,
                 "graph": mermaid_graph,
-                "intent": final_state.get("intent", "general"),
+                "intent": intent,
             }
-            logger.info(f"[Response] 回傳結果: {response_data}")
+            logger.info(f"[Response] User: {user_id}, Intent: {intent}")
             return response_data
 
         except Exception as e:
             logger.error(f"Graph Execution Error: {e}", exc_info=True)
-            return "分析過程出現異常，請檢查設備連線。"
+            return {
+                "text": "分析過程出現異常，請檢查數據或稍後再試。",
+                "graph": "",
+                "intent": "error",
+            }
 
     def _update_history(self, user_id: str, user_msg: str, ai_msg: str):
         history = self.chat_history_map.get(user_id, [])
+        # 處理 AI 訊息：如果包含巨大的 Base64 圖片，將其替換為佔位符
+        cleaned_ai_msg = re.sub(
+            r"data:image/[^;]+;base64,[A-Za-z0-9+/=]+", "[圖表數據已存檔]", ai_msg
+        )
         history.append(HumanMessage(content=user_msg))
-        history.append(AIMessage(content=ai_msg))
+        history.append(AIMessage(content=cleaned_ai_msg))
+        # 保持最近 10 則對話 (5 輪對話)
         self.chat_history_map[user_id] = history[-10:]
-        # 新增：監控記憶體大小
         logger.info(
-            f"[Memory] User: {user_id}, 當前對話歷史長度: {len(self.chat_history_map[user_id])}"
+            f"[Memory] User: {user_id} | 歷史訊息數: {len(self.chat_history_map[user_id])} | "
+            f"AI 回覆摘要: {cleaned_ai_msg[:50].replace('\n', ' ')}..."
         )
 
 

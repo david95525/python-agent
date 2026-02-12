@@ -10,7 +10,7 @@ __pycache__/
 # 資料庫與日誌
 *.log
 *.sqlite
-
+/logs/
 # IDE 相關
 .vscode/
 .idea/
