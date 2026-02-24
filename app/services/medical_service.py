@@ -238,23 +238,27 @@ class MedicalAgentService(BaseAgent):
         raw_data = state.get("context_data")
         if not raw_data:
             raw_data = get_user_health_data.invoke({"user_id": state["user_id"]})
-        logger.warning(
-            f"[Visualizer] State 中無數據，已重新抓取用戶 {state['user_id']} 數據"
-        )
+            logger.warning(
+                f"[Visualizer] State 中無數據，已重新抓取用戶 {state['user_id']} 數據"
+            )
+        # 取得用戶當前的需求
+        user_intent = state["input_message"]
+
         # 使用 with_structured_output 確保 LLM 回傳的是 ChartParams 物件而非字串
         structured_llm = self.llm.with_structured_output(ChartParams)
         # 升級指令：讓 LLM 決定要畫什麼指標
         # 注意：這裡我們傳入 raw_data 的範例，讓 LLM 知道有哪些欄位可用
         data_sample = raw_data[:500]  # 擷取部分數據供 LLM 參考
         visualizer_prompt = (
-            "你是一位資深的『數據視覺化專家』。請根據以下提供的數據樣本與用戶的對話意圖，"
-            "決定最適合的繪圖參數：\n\n"
-            f"【數據樣本】\n{data_sample}\n\n"
-            "【決策準則】\n"
-            "1. 指標選擇：檢查數據中的 Key，選擇用戶最感興趣或最相關的指標 (如: sys, dia, weight, bmi, glucose 等)。\n"
-            "2. 類型挑選：趨勢分析優先用 'line'；數值大小對比用 'bar'；分佈分析用 'scatter'。\n"
-            "3. 標題設計：標題需包含用戶 ID 或數據時間範圍，使其具備專業報告感。\n"
-            "4. 單位確認：確保 unit 與選擇的數據 Key 完全匹配 (例如 sys 對應 mmHg, weight 對應 kg)。"
+            "你是一位資深的『數據視覺化專家』。\n"
+            f"【用戶當前需求】：{user_intent}\n\n"  # 告訴 AI 用戶要看什麼
+            f"【數據樣本內容】：{data_sample}\n\n"
+            "【決策準則】：\n"
+            "1. 指標精選：請嚴格根據『用戶當前需求』決定繪製的 columns。\n"
+            "   - 若用戶說『只要看收縮壓』，columns 僅能包含 ['sys']。\n"
+            "   - 若用戶未指定，則根據數據常規 (如: ['sys', 'dia']) 繪製。\n"
+            "2. 類型挑選：趨勢用 'line'，對比用 'bar'。\n"
+            "3. 標題與單位：標題需專業且對應指標，單位需正確。"
         )
 
         # 獲取 LLM 決策
