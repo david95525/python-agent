@@ -1,6 +1,7 @@
+from contextlib import asynccontextmanager
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from app.services.medical_service import MedicalAgentService
+from app.services.medical.service import MedicalAgentService
 from app.services.financial_service import FinancialAgentService
 from app.utils.logger import setup_logger
 import time
@@ -22,8 +23,23 @@ class InvestRequest(BaseModel):
     context: str = ""
 
 
-medical_service = MedicalAgentService()
-financial_agent = FinancialAgentService()
+_medical_service = MedicalAgentService()
+_financial_agent = FinancialAgentService()
+
+
+@asynccontextmanager
+async def lifespan(app):
+    """
+    封裝所有服務相關的生命週期邏輯。
+    app 參數是 FastAPI 實體，雖然這裡用不到，但這是標準格式。
+    """
+    # 啟動時邏輯 (選填)
+    logger.info("[Lifespan] 系統服務準備就緒")
+    yield
+    logger.info("[Lifespan] 正在關閉所有服務資源...")
+    await _medical_service.close()
+    if hasattr(_financial_agent, "close"):  # 確保金融服務也有定義 close
+        await _financial_agent.close()
 
 
 @router.post("/chat")
@@ -33,8 +49,9 @@ async def chat(request: ChatRequest):
 
     try:
         # 呼叫後端服務
-        result_data = await medical_service.handle_chat(
-            request.userId, request.message)
+        result_data = await _medical_service.handle_chat(
+            request.userId, request.message
+        )
 
         # --- 關鍵防禦機制：檢查 result_data 是否為字典 ---
         if isinstance(result_data, str):
@@ -43,30 +60,23 @@ async def chat(request: ChatRequest):
             return {
                 "status": "error",
                 "message": result_data,
-                "data": {
-                    "text": result_data,
-                    "intent": "error",
-                    "graph": ""
-                }
+                "data": {"text": result_data, "intent": "error", "graph": ""},
             }
 
         process_time = time.time() - start_time
 
         # 安全地使用 .get()，提供預設值
-        intent = result_data.get('intent', 'unknown')
-        text = result_data.get('text', '無回覆內容')
-        graph = result_data.get('graph', '')
+        intent = result_data.get("intent", "unknown")
+        text = result_data.get("text", "無回覆內容")
+        graph = result_data.get("graph", "")
 
         logger.info(
-            f"[Response] 處理成功 - Intent: {intent} | 耗時: {process_time:.2f}s")
+            f"[Response] 處理成功 - Intent: {intent} | 耗時: {process_time:.2f}s"
+        )
 
         return {
             "status": "success",
-            "data": {
-                "text": text,
-                "graph": graph,
-                "intent": intent
-            }
+            "data": {"text": text, "graph": graph, "intent": intent},
         }
 
     except Exception as e:
@@ -83,7 +93,7 @@ async def invest_manual(payload: InvestRequest):
     logger.info(f"[API] 收到深度研究請求: {payload.symbol}")
     try:
         # 呼叫金融分析服務
-        result = await financial_agent.run_manual_logic(payload.symbol)
+        result = await _financial_agent.run_manual_logic(payload.symbol)
 
         logger.info(f"[API] {payload.symbol} 分析完成")
         return {"status": "success", "data": result}
@@ -96,7 +106,7 @@ async def invest_manual(payload: InvestRequest):
 async def invest_official(payload: InvestRequest):
     """封裝路徑 (DeepAgents)"""
     try:
-        result = await financial_agent.run_official_deep_logic(payload.symbol)
+        result = await _financial_agent.run_official_deep_logic(payload.symbol)
         return {"mode": "Official DeepAgents", "result": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
