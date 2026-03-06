@@ -1,22 +1,28 @@
+# app/services/tools/medical_tools.py
 import os
+import httpx
 import json
 import io
 import base64
 import matplotlib.pyplot as plt
 import pandas as pd
-from typing import Literal
+from typing import Literal, Optional
 from sqlalchemy import text
+from datetime import datetime, timedelta
 from langchain.tools import tool
-from app.core.config import settings
-from app.utils.logger import setup_logger
 from matplotlib.font_manager import FontProperties, fontManager
 from typing import List, Literal
+
+
+from app.core.config import settings
+from app.utils.logger import setup_logger
 
 # 根據 provider 動態載入
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_openai import OpenAIEmbeddings
 from langchain_aws import BedrockEmbeddings
-#from langchain_postgres.vectorstores import PGVector
+
+# from langchain_postgres.vectorstores import PGVector
 
 # 初始化 Logger
 logger = setup_logger("MedicalTools")
@@ -44,7 +50,7 @@ def get_active_embeddings():
 embeddings = get_active_embeddings()
 
 
-#@tool
+# @tool
 # --- 原先的 RAG 函數已停用 (保留供未來參考) ---
 # async def search_device_manual(query: str) -> str:
 #     """獲取儀器官方說明書內容"""
@@ -69,7 +75,7 @@ embeddings = get_active_embeddings()
 #         with vector_store.session_maker() as session:
 #             count_query = text(
 #                 """
-#                 SELECT count(*) FROM langchain_pg_embedding 
+#                 SELECT count(*) FROM langchain_pg_embedding
 #                 WHERE collection_id = (SELECT uuid FROM langchain_pg_collection WHERE name = :name)
 #             """
 #             )
@@ -146,40 +152,88 @@ async def get_device_knowledge(query: str) -> str:
 
 
 @tool
-def get_user_health_data(user_id: str) -> str:
-    """獲取用戶的歷史血壓與心率數據。"""
-    logger.info(f"[HealthData] 讀取用戶健康數據: {user_id}")
-    # 模擬數據
-    bp_history = [
-        {"date": "2025-01-05", "sys": 118, "dia": 78, "pul": 72},
-        {"date": "2025-01-20", "sys": 122, "dia": 80, "pul": 75},
-        {"date": "2025-02-12", "sys": 125, "dia": 82, "pul": 68},
-        {"date": "2025-02-25", "sys": 120, "dia": 79, "pul": 70},
-        {"date": "2025-03-08", "sys": 119, "dia": 77, "pul": 74},
-        {"date": "2025-03-22", "sys": 121, "dia": 81, "pul": 71},
-        {"date": "2025-04-10", "sys": 124, "dia": 83, "pul": 73},
-        {"date": "2025-04-28", "sys": 118, "dia": 76, "pul": 69},
-        {"date": "2025-05-15", "sys": 117, "dia": 75, "pul": 72},
-        {"date": "2025-05-30", "sys": 120, "dia": 78, "pul": 76},
-        {"date": "2025-06-11", "sys": 122, "dia": 80, "pul": 70},
-        {"date": "2025-06-25", "sys": 126, "dia": 84, "pul": 74},
-        {"date": "2025-07-04", "sys": 123, "dia": 81, "pul": 75},
-        {"date": "2025-07-19", "sys": 121, "dia": 79, "pul": 72},
-        {"date": "2025-08-05", "sys": 119, "dia": 78, "pul": 71},
-        {"date": "2025-08-20", "sys": 120, "dia": 80, "pul": 73},
-        {"date": "2025-09-12", "sys": 122, "dia": 82, "pul": 68},
-        {"date": "2025-09-28", "sys": 118, "dia": 77, "pul": 70},
-        {"date": "2025-10-03", "sys": 125, "dia": 85, "pul": 77},
-        {"date": "2025-10-21", "sys": 121, "dia": 80, "pul": 74},
-        {"date": "2025-11-09", "sys": 123, "dia": 81, "pul": 72},
-        {"date": "2025-11-24", "sys": 119, "dia": 78, "pul": 70},
-        {"date": "2025-12-10", "sys": 126, "dia": 83, "pul": 75},
-        {"date": "2025-12-25", "sys": 122, "dia": 80, "pul": 71},
-    ]
+async def get_user_health_data(
+    user_id: str, start_date: Optional[str] = None, end_date: Optional[str] = None
+) -> str:
+    """
+    從遠端 API 獲取用戶的歷史血壓與心率數據。
 
-    result = {"status": "success", "userId": user_id, "history": bp_history}
-    logger.debug(f"[HealthData] 成功獲取 {len(bp_history)} 筆歷史紀錄")
-    return json.dumps(result, ensure_ascii=False)
+    Args:
+        user_id: 用戶唯一識別碼。
+        start_date: (選填) 查詢起始日期，格式為 yyyy-mm-dd。若未提供，預設為一年前。
+        end_date: (選填) 查詢結束日期，格式為 yyyy-mm-dd。若未提供，預設為今天。
+    """
+    logger.info(
+        f"[API Fetch] 正在獲取用戶數據: {user_id}, 範圍: {start_date} 至 {end_date}"
+    )
+
+    # 動態處理日期邏輯
+    # 如果使用者沒說 end_date，預設為今天
+    if not end_date:
+        end_date = datetime.now().strftime("%Y-%m-%d")
+
+    # 如果使用者沒說 start_date，預設為 end_date 的一年前
+    if not start_date:
+        # 先解析 end_date 以確保基準點一致
+        base_date = datetime.strptime(end_date, "%Y-%m-%d")
+        start_date = (base_date - timedelta(days=365)).strftime("%Y-%m-%d")
+
+    # 準備 API 請求
+    api_url = f"{settings.api_domain}/api/get_bpm_history_data"
+    logger.debug(api_url)
+    params = {
+        "start": start_date,
+        "end": end_date,
+        "limit": 100,  # 動態查詢時，可以稍微放寬筆數限制
+        "offset": 0,
+        "time_type": 1,  # 依量測時間搜尋
+    }
+
+    headers = {
+        "Authorization": f"Bearer {settings.api_token}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(api_url, headers=headers, params=params)
+
+            if response.status_code != 200:
+                logger.error(f"[API Error] 狀態碼: {response.status_code}")
+                return json.dumps({"status": "error", "message": "遠端伺服器回應異常"})
+
+            raw_res = response.json()
+
+            # 數據整理
+            clean_history = []
+            for item in raw_res.get("data", []):
+                clean_history.append(
+                    {
+                        "date": item.get("date"),
+                        "sys": item.get("sys"),
+                        "dia": item.get("dia"),
+                        "pul": item.get("pul"),
+                        "note": item.get("note", ""),
+                    }
+                )
+
+            formatted_data = {
+                "status": "success",
+                "userId": user_id,
+                "range": {
+                    "start": start_date,
+                    "end": end_date,
+                },  # 回傳給 LLM 讓它知道最終查了什麼範圍
+                "history": clean_history,
+                "total": raw_res.get("total_num", 0),
+            }
+
+            logger.info(f"[API Success] 成功解析 {len(clean_history)} 筆量測紀錄")
+            return json.dumps(formatted_data, ensure_ascii=False)
+
+    except httpx.RequestError as exc:
+        logger.error(f"[API Network Error] 連線失敗: {exc}")
+        return json.dumps({"status": "error", "message": "網路連線失敗，無法取得數據"})
 
 
 DOCKER_FONT_PATH = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
@@ -301,3 +355,40 @@ def plot_health_chart(
 
     except Exception as e:
         return f"圖表生成失敗: {str(e)}"
+
+
+# @tool
+# def get_mock_user_health_data(user_id: str) -> str:
+#     """獲取用戶的歷史血壓與心率數據。"""
+#     logger.info(f"[HealthData] 讀取用戶健康數據: {user_id}")
+#     # 模擬數據
+#     bp_history = [
+#         {"date": "2025-01-05", "sys": 118, "dia": 78, "pul": 72},
+#         {"date": "2025-01-20", "sys": 122, "dia": 80, "pul": 75},
+#         {"date": "2025-02-12", "sys": 125, "dia": 82, "pul": 68},
+#         {"date": "2025-02-25", "sys": 120, "dia": 79, "pul": 70},
+#         {"date": "2025-03-08", "sys": 119, "dia": 77, "pul": 74},
+#         {"date": "2025-03-22", "sys": 121, "dia": 81, "pul": 71},
+#         {"date": "2025-04-10", "sys": 124, "dia": 83, "pul": 73},
+#         {"date": "2025-04-28", "sys": 118, "dia": 76, "pul": 69},
+#         {"date": "2025-05-15", "sys": 117, "dia": 75, "pul": 72},
+#         {"date": "2025-05-30", "sys": 120, "dia": 78, "pul": 76},
+#         {"date": "2025-06-11", "sys": 122, "dia": 80, "pul": 70},
+#         {"date": "2025-06-25", "sys": 126, "dia": 84, "pul": 74},
+#         {"date": "2025-07-04", "sys": 123, "dia": 81, "pul": 75},
+#         {"date": "2025-07-19", "sys": 121, "dia": 79, "pul": 72},
+#         {"date": "2025-08-05", "sys": 119, "dia": 78, "pul": 71},
+#         {"date": "2025-08-20", "sys": 120, "dia": 80, "pul": 73},
+#         {"date": "2025-09-12", "sys": 122, "dia": 82, "pul": 68},
+#         {"date": "2025-09-28", "sys": 118, "dia": 77, "pul": 70},
+#         {"date": "2025-10-03", "sys": 125, "dia": 85, "pul": 77},
+#         {"date": "2025-10-21", "sys": 121, "dia": 80, "pul": 74},
+#         {"date": "2025-11-09", "sys": 123, "dia": 81, "pul": 72},
+#         {"date": "2025-11-24", "sys": 119, "dia": 78, "pul": 70},
+#         {"date": "2025-12-10", "sys": 126, "dia": 83, "pul": 75},
+#         {"date": "2025-12-25", "sys": 122, "dia": 80, "pul": 71},
+#     ]
+
+#     result = {"status": "success", "userId": user_id, "history": bp_history}
+#     logger.debug(f"[HealthData] 成功獲取 {len(bp_history)} 筆歷史紀錄")
+#     return json.dumps(result, ensure_ascii=False)

@@ -15,41 +15,33 @@ window.downloadChart = downloadChart;
 // 渲染邏輯 (封裝 Mermaid 處理)
 async function renderGraph(payload) {
     const graphContainer = document.getElementById('mermaid-graph');
+    // 如果後端沒傳 graph 字串過來，就不執行
     if (!graphContainer || !payload.graph) return;
 
-    // 清除舊狀態
     graphContainer.removeAttribute('data-processed');
 
     let mermaidCode = payload.graph;
     const intent = payload.intent;
 
-    // 高亮對應節點
-    const nodeMapping = {
-        'device_expert': 'device_expert',
-        'health_analyst': 'health_analyst',
-        'visualizer': 'visualizer',
-        'general': 'general_assistant'
-    };
+    // 這裡的邏輯：如果 intent 是 health_analyst，
+    // 因為流程變成了 parser -> health_analyst，我們高亮最終分析的那個點
+    const activeNode = intent === 'health_analyst' ? 'health_analyst' : intent;
 
-    if (nodeMapping[intent]) {
-        mermaidCode += `\nclass ${nodeMapping[intent]} activeNode`;
+    // 檢查 mermaidCode 裡是否有這個 ID，有的話才加 class
+    if (mermaidCode.includes(activeNode)) {
+        mermaidCode += `\nclass ${activeNode} activeNode`;
     }
 
-    if (payload.is_emergency) {
+    // 緊急狀態特殊高亮
+    if (payload.is_emergency || mermaidCode.includes('activeEmergencyNode')) {
         mermaidCode += '\nclass emergency_advice activeEmergencyNode';
     }
 
-    // 更新 DOM 並渲染
     graphContainer.innerHTML = mermaidCode;
 
     try {
         await mermaid.run({ nodes: [graphContainer] });
-        const svg = graphContainer.querySelector('svg');
-        if (svg) {
-            svg.style.maxWidth = 'none';
-            svg.style.width = '100%';
-            svg.style.height = 'auto';
-        }
+        // SVG 自適應處理 ...
     } catch (err) {
         console.error("Mermaid Render Error:", err);
     }
@@ -135,14 +127,5 @@ document.addEventListener('DOMContentLoaded', async () => {
                 sendMessage();
             }
         });
-    }
-
-    // 初始 Mermaid 渲染
-    if (graphContainer && window.mermaid) {
-        try {
-            await mermaid.run({ nodes: [graphContainer] });
-        } catch (e) {
-            console.warn("Initial Mermaid load pending...");
-        }
     }
 });

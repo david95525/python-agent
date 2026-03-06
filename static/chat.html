@@ -36,21 +36,6 @@
         <div id="intent-display" style="font-size: 0.8em; color: #888; margin-bottom: 10px;">系統狀態：就緒</div>
         <div id="graph-container">
             <pre class="mermaid" id="mermaid-graph">
-            graph TD
-            START((START)) --> Router{Intent Router}
-    
-            Router -- Hardware Issues --> device_expert[Device Expert]
-            Router -- Health Data --> health_analyst[Health Analyst]
-            Router -- Chat/Others --> general_assistant[General Assistant]
-    
-            %% Condition Branch
-            health_analyst --> IsEmergency{Risk Assessment}
-            IsEmergency -- Abnormal --> emergency_advice[Emergency Advice]
-            IsEmergency -- Normal --> END((END))
-    
-            device_expert --> END
-            general_assistant --> END
-            emergency_advice --> END     
         </pre>
         </div>
     </div>
