@@ -3,177 +3,37 @@
 
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Medical AI Assistant Demo</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        /* 漂浮按鈕 */
-        #chat-widget-trigger {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            width: 65px;
-            height: 65px;
-            background: linear-gradient(135deg, #3498db, #2980b9);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 28px;
-            cursor: pointer;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-            z-index: 9999;
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-
-        #chat-widget-trigger:hover {
-            transform: scale(1.1) rotate(5deg);
-        }
-
-        /* 對話視窗 */
-        #chat-container {
-            position: fixed;
-            bottom: 110px;
-            right: 30px;
-            width: 380px;
-            max-height: 600px;
-            height: 70vh;
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.15);
-            display: none;
-            /* 初始隱藏 */
-            flex-direction: column;
-            overflow: hidden;
-            z-index: 9999;
-            border: 1px solid #eee;
-        }
-
-        #chat-header {
-            background: #3498db;
-            color: white;
-            padding: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        #chat-box {
-            flex: 1;
-            padding: 20px;
-            overflow-y: auto;
-            background: #f8f9fa;
-        }
-
-        .message {
-            margin-bottom: 15px;
-            max-width: 85%;
-            padding: 12px 16px;
-            border-radius: 15px;
-            font-size: 14px;
-            line-height: 1.5;
-        }
-
-        .user-msg {
-            background: #3498db;
-            color: white;
-            align-self: flex-end;
-            margin-left: auto;
-            border-bottom-right-radius: 2px;
-        }
-
-        .ai-msg {
-            background: white;
-            color: #333;
-            border: 1px solid #e0e0e0;
-            border-bottom-left-radius: 2px;
-        }
-
-        #input-area {
-            padding: 15px;
-            display: flex;
-            background: white;
-            border-top: 1px solid #eee;
-        }
-
-        #user-input {
-            flex: 1;
-            border: 1px solid #ddd;
-            padding: 10px 15px;
-            border-radius: 25px;
-            outline: none;
-        }
-
-        #send-btn {
-            margin-left: 10px;
-            background: #3498db;
-            color: white;
-            border: none;
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            cursor: pointer;
-        }
-    </style>
+    <link rel="stylesheet" href="/static/css/demo.css">
 </head>
 
 <body>
 
-    <div id="chat-widget-trigger" onclick="toggleChat()">
+    <div id="chat-widget-trigger">
         <i class="fas fa-robot"></i>
     </div>
 
     <div id="chat-container">
         <div id="chat-header">
             <span><i class="fas fa-heartbeat"></i> AI 健康助理</span>
-            <i class="fas fa-times" style="cursor:pointer" onclick="toggleChat()"></i>
+            <i class="fas fa-times" id="close-chat" style="cursor:pointer"></i>
         </div>
-        <div id="chat-box" style="display:flex; flex-direction:column;">
-            <div class="message ai-msg">您好！我是您的健康小助手。我已經準備好分析您的血壓紀錄了，請問有什麼我可以幫您的嗎？</div>
+
+        <div id="chat-box">
+            <div class="message ai-msg">
+                您好！我是您的健康小助手。我已經準備好分析您的血壓紀錄了，請問有什麼我可以幫您的嗎？
+            </div>
         </div>
+
         <div id="input-area">
             <input type="text" id="user-input" placeholder="請輸入您的問題...">
-            <button id="send-btn" onclick="sendMessage()"><i class="fas fa-paper-plane"></i></button>
+            <button id="send-btn"><i class="fas fa-paper-plane"></i></button>
         </div>
     </div>
 
-    <script>
-        function toggleChat() {
-            const container = document.getElementById('chat-container');
-            container.style.display = (container.style.display === 'flex') ? 'none' : 'flex';
-        }
-
-        async function sendMessage() {
-            const input = document.getElementById('user-input');
-            const box = document.getElementById('chat-box');
-            if (!input.value) return;
-
-            const text = input.value;
-            box.innerHTML += `<div class="message user-msg">${text}</div>`;
-            input.value = '';
-            box.scrollTop = box.scrollHeight;
-
-            // 模擬 Loading
-            const loading = document.createElement('div');
-            loading.className = 'message ai-msg';
-            loading.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 分析數據中...';
-            box.appendChild(loading);
-
-            try {
-                const res = await fetch('/api/v1/demo/quick-chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: text, userId: "default-user" })
-                });
-                const result = await res.json();
-                box.removeChild(loading);
-                box.innerHTML += `<div class="message ai-msg">${result.data.text}</div>`;
-            } catch (e) {
-                loading.innerHTML = "抱歉，連線失敗。";
-            }
-            box.scrollTop = box.scrollHeight;
-        }
-    </script>
+    <script src="/static/js/demo.js"></script>
 </body>
 
 </html>

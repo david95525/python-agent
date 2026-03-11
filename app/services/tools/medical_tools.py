@@ -207,6 +207,8 @@ async def get_user_health_data(
             # 數據整理
             clean_history = []
             for item in raw_res.get("data", []):
+                if item.get("data_type") == "delete" or item.get("sys") == 0:
+                    continue
                 clean_history.append(
                     {
                         "date": item.get("date"),
@@ -229,6 +231,7 @@ async def get_user_health_data(
             }
 
             logger.info(f"[API Success] 成功解析 {len(clean_history)} 筆量測紀錄")
+            logger.debug(f"[Debug] API 原始內容: {formatted_data}")
             return json.dumps(formatted_data, ensure_ascii=False)
 
     except httpx.RequestError as exc:

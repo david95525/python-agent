@@ -64,7 +64,6 @@ class HealthAnalystNodes:
                 }
             )
             logger.info(f"[Debug] API 回傳數據長度: {len(raw_data) if raw_data else 0}")
-            logger.debug(f"[Debug] API 原始內容: {raw_data[:500]}")
 
         data_list = []
         try:
