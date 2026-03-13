@@ -6,6 +6,7 @@ logger = setup_logger("AgentService")
 
 
 class RouterNode:
+
     def __init__(self, llm, manifest: str, valid_ids: list):
         self.llm = llm
         self.manifest = manifest
@@ -25,8 +26,8 @@ class RouterNode:
         confirm_keywords = ["好", "要", "畫", "ok", "yes", "確認", "畫吧", "顯示"]
         is_asking_to_plot = "繪製趨勢分析圖表嗎" in last_ai_message
         if is_asking_to_plot and any(
-            k in state["input_message"].strip().lower() for k in confirm_keywords
-        ):
+                k in state["input_message"].strip().lower()
+                for k in confirm_keywords):
             return {"intent": "visualizer"}
 
         # 3. LLM 判斷邏輯 (第二層保險)
@@ -37,22 +38,20 @@ class RouterNode:
             f"【當前技能清單】\n{self.manifest}\n\n"
             f"【上一回合意圖】：{last_intent}\n"
             f"【用戶訊息】：{state['input_message']}\n\n"
-            "【判定優先順序（由高至低）】：\n"
-            "1. **明確指令偵測**：\n"
-            "   - 詢問設備操作、故障、代碼 -> 'device_expert'\n"
-            "   - **健康數據與時間查詢**：提供新數據、詢問歷史數值、詢問特定時間範圍（如：去年、上個月、昨天）的健康狀況、詢問數值意義 -> 'health_analyst'\n"
-            "   - 要求畫圖、調整圖表樣式、同意繪圖建議 -> 'visualizer'\n\n"
-            "2. **上下文慣性（追問判定）**：\n"
-            "   - 若訊息簡短且具指代性（如：『那去年呢？』、『平均是多少？』、『為什麼？』），請維持與『上一回合意圖』一致。\n\n"
-            "3. **狀態回應**：\n"
-            "   - 若 AI 剛詢問是否畫圖且用戶回答『好/要/ok』 -> 'visualizer'\n\n"
-            "4. **預設行為**：\n"
-            "   - 以上皆非 -> 'general'\n\n"
-            "【指令】僅回傳 ID，嚴禁解釋。"
-        )
+            "【判定意圖類別（ID）說明】：\n"
+            "1. **'device_expert'**: 詢問設備操作、故障、設定、代碼等硬體問題。\n"
+            "2. **'health_query'**: 單純的數據查詢。例如：『查去年紀錄』、『列出上週血壓』、『昨天測了幾次』。特徵是沒有詢問『為什麼』或『好不好』。\n"
+            "3. **'health_analyst'**: 涉及健康評估與分析。例如：『我這樣正常嗎』、『最近血壓為什麼高』、『幫我分析趨勢』、『給我健康建議』。\n"
+            "4. **'visualizer'**: 要求畫圖、調整圖表、或同意 AI 的繪圖建議。\n"
+            "5. **'general'**: 一般打招呼或無法歸類的閒聊。\n\n"
+            "【決策準則】：\n"
+            "- 如果用戶同時查詢資料且要求分析（如：『查上週紀錄並分析』），優先判斷為 'health_analyst'。\n"
+            "- 如果只是問『那去年呢？』且上一次是查詢，判斷為 'health_query'。\n\n"
+            "【指令】僅回傳 ID，嚴禁解釋。")
 
         res = await self.llm.ainvoke(prompt)
-        raw_intent = res.content.strip().lower().replace(".", "").replace("'", "")
+        raw_intent = res.content.strip().lower().replace(".",
+                                                         "").replace("'", "")
 
         # 4. ID 匹配邏輯
         final_intent = "general"

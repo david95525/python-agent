@@ -53,8 +53,7 @@ async def chat(request: ChatRequest):
     try:
         # 呼叫後端服務
         result_data = await _medical_service.handle_chat(
-            request.userId, request.message
-        )
+            request.userId, request.message)
 
         # --- 關鍵防禦機制：檢查 result_data 是否為字典 ---
         if isinstance(result_data, str):
@@ -63,7 +62,11 @@ async def chat(request: ChatRequest):
             return {
                 "status": "error",
                 "message": result_data,
-                "data": {"text": result_data, "intent": "error", "graph": ""},
+                "data": {
+                    "text": result_data,
+                    "intent": "error",
+                    "graph": ""
+                },
             }
 
         process_time = time.time() - start_time
@@ -74,12 +77,17 @@ async def chat(request: ChatRequest):
         graph = result_data.get("graph", "")
 
         logger.info(
-            f"[Response] 處理成功 - Intent: {intent} | 耗時: {process_time:.2f}s"
-        )
+            f"[Response] 處理成功 - Intent: {intent} | 耗時: {process_time:.2f}s")
 
         return {
             "status": "success",
-            "data": {"text": text, "graph": graph, "intent": intent},
+            "data": {
+                "text": text,
+                "graph": graph,
+                "intent": intent,
+                "ui_data": result_data.get("ui_data"),
+                "is_emergency": result_data.get("is_emergency", False)
+            },
         }
 
     except Exception as e:
@@ -121,9 +129,14 @@ async def demo_quick_chat(request: ChatRequest):
     try:
         # 直接呼叫分離出來的 Service
         answer = await _medical_demo_service.run_demo_chat(
-            request.userId, request.message
-        )
-        return {"status": "success", "data": {"text": answer, "intent": "medical_demo"}}
+            request.userId, request.message)
+        return {
+            "status": "success",
+            "data": {
+                "text": answer,
+                "intent": "medical_demo"
+            }
+        }
     except Exception as e:
         logger.error(f"[API Error] Demo 失敗: {str(e)}")
         return {"status": "error", "message": "Demo 服務異常"}

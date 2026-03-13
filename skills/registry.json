@@ -17,16 +17,6 @@
       "description": "首席金融分析師，處理股票代號分析、市場新聞解讀、投資風險評估與深度研究報告。",
       "file": "financial_expert/SKILL.md",
       "type": "expert"
-    },
-    {
-      "id": "visualizer",
-      "description": "繪圖專家，當用戶明確要求繪製圖表、查看趨勢圖，或同意 AI 之前的繪圖建議時使用。",
-      "type": "system"
-    },
-    {
-      "id": "general",
-      "description": "通用助手，若用戶詢問非「醫療設備操作」或「個人健康數據分析」以外的專業問題（如金融、投資、法律等），此節點將負責禮貌拒絕並引導回核心服務。",
-      "type": "system"
     }
   ]
 }

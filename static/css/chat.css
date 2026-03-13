@@ -203,3 +203,75 @@ button {
     margin: 10px 0;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
+
+/* --- 模式容器基礎 --- */
+.data-component-container {
+    margin-top: 15px;
+    padding: 12px;
+    border-radius: 8px;
+    border-left: 5px solid #ddd;
+    background: #ffffff;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+/* A. 清單模式：綠色調 (單純資料) */
+.data-component-container.mode-list {
+    border-left-color: #51cf66;
+    background-color: #fbfdfb;
+}
+
+/* B. 分析模式：藍色調 (專業評估) */
+.data-component-container.mode-analysis {
+    border-left-color: #4dabf7;
+    background-color: #f8faff;
+}
+
+/* C. 錯誤模式：紅色調 */
+.msg-error {
+    color: #e03131;
+    background: #fff5f5;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #ffa8a8;
+}
+
+/* 模式標籤 */
+.mode-tag {
+    font-size: 11px;
+    font-weight: bold;
+    margin-bottom: 8px;
+    display: inline-block;
+}
+
+.mode-list .mode-tag {
+    color: #2b8a3e;
+}
+
+.mode-analysis .mode-tag {
+    color: #1971c2;
+}
+
+.data-table td,
+.data-table th {
+    padding: 8px 4px;
+}
+
+/* 新增滾動區域限制 */
+.data-table-scroll-area {
+    max-height: 300px;
+    /* 超過 300px 則顯示捲軸 */
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 5px;
+    margin-top: 5px;
+}
+
+/* 美化捲軸 (可選) */
+.data-table-scroll-area::-webkit-scrollbar {
+    width: 4px;
+}
+
+.data-table-scroll-area::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 4px;
+}

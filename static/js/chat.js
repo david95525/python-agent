@@ -23,13 +23,15 @@ async function renderGraph(payload) {
     let mermaidCode = payload.graph;
     const intent = payload.intent;
 
-    // 這裡的邏輯：如果 intent 是 health_analyst，
-    // 因為流程變成了 parser -> health_analyst，我們高亮最終分析的那個點
-    const activeNode = intent === 'health_analyst' ? 'health_analyst' : intent;
+    let highlightNode = intent;
+    if (intent === 'health_query') {
+        highlightNode = 'fetch_records'; // 純查詢時，高亮停止的那個節點
+    } else if (intent === 'health_analyst') {
+        highlightNode = 'health_analyst';
+    }
 
-    // 檢查 mermaidCode 裡是否有這個 ID，有的話才加 class
-    if (mermaidCode.includes(activeNode)) {
-        mermaidCode += `\nclass ${activeNode} activeNode`;
+    if (mermaidCode.includes(highlightNode)) {
+        mermaidCode += `\nclass ${highlightNode} activeNode`;
     }
 
     // 緊急狀態特殊高亮
@@ -72,34 +74,16 @@ async function sendMessage() {
         const json = await response.json();
         const payload = json.data;
 
-        // 格式化回覆內容：處理圖片與換行
-        let formattedText = payload.text
-            .replace(/\n/g, '<br>') // 處理一般換行
-            .replace(
-                /!\[.*?\]\((data:image\/.*?;base64,.*?)\)/g,
-                (match, base64Data) => `
-                    <div class="chart-container-inner" style="text-align: center; margin-top: 10px;">
-                        <img src="${base64Data}" style="width:100%; border-radius:10px; border:1px solid #eee;" />
-                        <br>
-                        <button class="download-btn" onclick="downloadChart('${base64Data}')">
-                            📥 下載趨勢圖表
-                        </button>
-                    </div>
-                `
-            );
+        let finalUI = beautifyContent(payload);
 
-        document.getElementById(loadingId).innerHTML = formattedText;
-
-        // 更新意圖看板
-        const intentDisplay = document.getElementById('intent-display');
-        if (intentDisplay) {
-            intentDisplay.innerHTML = `意圖辨識：<b>${payload.intent}</b> ${payload.is_emergency ?
-                "<span style='color:red;'>[緊急]</span>" : ""}`;
-        }
+        document.getElementById(loadingId).innerHTML = finalUI;
 
         // 執行圖表更新
         await renderGraph(payload);
-
+        setTimeout(() => {
+            const chatBox = document.getElementById('chat-box');
+            chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
+        }, 100);
     } catch (error) {
         console.error("Chat Error:", error);
         document.getElementById(loadingId).innerText = "連線失敗，請檢查網路或系統狀態。";
@@ -129,3 +113,84 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 });
+/**
+ * 核心渲染邏輯：嚴格遵守 SKILL.MD，不進行多餘統計
+ */
+function beautifyContent(payload) {
+    // 基礎安全檢查
+    if (!payload || payload.intent === 'error') {
+        return `<div class="msg-error">❌ ${payload?.text || "系統處理異常"}</div>`;
+    }
+    let text = payload.text || "";
+    // 給予預設文字
+    if (payload.intent === 'health_query' && !text) {
+        text = "已為您讀取紀錄明細如下：";
+    }
+    let extraHTML = '';
+    const ui = payload.ui_data;
+
+    // 處理圖片與下載按鈕
+    text = text.replace(
+        /!\[.*?\]\((data:image\/.*?;base64,.*?)\)/g,
+        (match, base64Data) => `
+            <div class="chart-wrapper">
+                <img src="${base64Data}" class="chart-img" />
+                <button class="download-btn" onclick="downloadChart('${base64Data}')">
+                    <i class="fas fa-download"></i> 下載圖表
+                </button>
+            </div>
+        `
+    );
+
+    // 處理換行
+    text = text.replace(/\n/g, '<br>');
+
+    // 數據組件偵測
+    if (ui && ui.records && ui.records.length > 0) {
+        // 使用 intent 來精準判斷模式
+        const isAnalysisMode = payload.intent === 'health_analyst';
+        const modeClass = isAnalysisMode ? "mode-analysis" : "mode-list";
+        const modeLabel = isAnalysisMode ? "專業分析數據來源" : "查詢紀錄明細";
+
+        extraHTML += `
+            <div class="data-component-container ${modeClass}">
+                <div class="mode-tag">${modeLabel}</div>
+                <div class="data-table-scroll-area">
+                    ${generateSimpleTable(ui.records)}
+                </div>
+            </div>`;
+    }
+
+    return `<div class="content-body">${text}</div>${extraHTML}`;
+}
+
+/**
+ * 修改：加入標題與更精簡的結構
+ */
+function generateSimpleTable(list) {
+    const rows = list.map(item => {
+        const isHigh = item.sys >= 135 || item.dia >= 85;
+        const statusClass = isHigh ? 'val-high' : 'val-normal';
+        const dateStr = item.date ? item.date.split(' ')[0] : '-';
+
+        return `
+            <tr>
+                <td>${dateStr}</td>
+                <td class="cell-center ${statusClass}">${item.sys}/${item.dia}</td>
+                <td class="cell-center">${item.pul || '-'}</td>
+            </tr>`;
+    }).join('');
+
+    return `
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>日期</th>
+                        <th class="cell-center">血壓(S/D)</th>
+                        <th class="cell-center">心率</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+        `;
+}

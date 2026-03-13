@@ -13,7 +13,6 @@ from langchain.tools import tool
 from matplotlib.font_manager import FontProperties, fontManager
 from typing import List, Literal
 
-
 from app.core.config import settings
 from app.utils.logger import setup_logger
 
@@ -34,8 +33,8 @@ def get_active_embeddings():
 
     if provider == "google":
         return GoogleGenerativeAIEmbeddings(
-            model="models/text-embedding-004", google_api_key=settings.gemini_api_key
-        )
+            model="models/text-embedding-004",
+            google_api_key=settings.gemini_api_key)
     elif provider == "openai":
         return OpenAIEmbeddings(model="text-embedding-3-small")
     elif provider == "bedrock":
@@ -48,7 +47,6 @@ def get_active_embeddings():
 
 
 embeddings = get_active_embeddings()
-
 
 # @tool
 # --- 原先的 RAG 函數已停用 (保留供未來參考) ---
@@ -152,9 +150,9 @@ async def get_device_knowledge(query: str) -> str:
 
 
 @tool
-async def get_user_health_data(
-    user_id: str, start_date: Optional[str] = None, end_date: Optional[str] = None
-) -> str:
+async def get_user_health_data(user_id: str,
+                               start_date: Optional[str] = None,
+                               end_date: Optional[str] = None) -> str:
     """
     從遠端 API 獲取用戶的歷史血壓與心率數據。
 
@@ -164,8 +162,7 @@ async def get_user_health_data(
         end_date: (選填) 查詢結束日期，格式為 yyyy-mm-dd。若未提供，預設為今天。
     """
     logger.info(
-        f"[API Fetch] 正在獲取用戶數據: {user_id}, 範圍: {start_date} 至 {end_date}"
-    )
+        f"[API Fetch] 正在獲取用戶數據: {user_id}, 範圍: {start_date} 至 {end_date}")
 
     # 動態處理日期邏輯
     # 如果使用者沒說 end_date，預設為今天
@@ -180,7 +177,6 @@ async def get_user_health_data(
 
     # 準備 API 請求
     api_url = f"{settings.api_domain}/api/get_bpm_history_data"
-    logger.debug(api_url)
     params = {
         "start": start_date,
         "end": end_date,
@@ -196,7 +192,9 @@ async def get_user_health_data(
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(api_url, headers=headers, params=params)
+            response = await client.get(api_url,
+                                        headers=headers,
+                                        params=params)
 
             if response.status_code != 200:
                 logger.error(f"[API Error] 狀態碼: {response.status_code}")
@@ -209,15 +207,13 @@ async def get_user_health_data(
             for item in raw_res.get("data", []):
                 if item.get("data_type") == "delete" or item.get("sys") == 0:
                     continue
-                clean_history.append(
-                    {
-                        "date": item.get("date"),
-                        "sys": item.get("sys"),
-                        "dia": item.get("dia"),
-                        "pul": item.get("pul"),
-                        "note": item.get("note", ""),
-                    }
-                )
+                clean_history.append({
+                    "date": item.get("date"),
+                    "sys": item.get("sys"),
+                    "dia": item.get("dia"),
+                    "pul": item.get("pul"),
+                    "note": item.get("note", ""),
+                })
 
             formatted_data = {
                 "status": "success",
@@ -248,8 +244,8 @@ try:
     else:
         # 如果路徑不存在（例如本地開發），則搜尋系統清單
         noto_font = next(
-            (f.fname for f in fontManager.ttflist if "Noto Sans CJK" in f.name), None
-        )
+            (f.fname
+             for f in fontManager.ttflist if "Noto Sans CJK" in f.name), None)
         if noto_font:
             zh_font = FontProperties(fname=noto_font)
         else:
@@ -312,7 +308,9 @@ def plot_health_chart(
                     alpha=0.7,
                     align="center",
                 )
-                plt.xticks(range(len(df)), df["date"].dt.strftime("%m-%d"), rotation=45)
+                plt.xticks(range(len(df)),
+                           df["date"].dt.strftime("%m-%d"),
+                           rotation=45)
 
             elif chart_type == "scatter":
                 plt.scatter(
