@@ -97,8 +97,13 @@ class HealthAnalystNodes:
         raw_data = state.get("context_data")
         if not raw_data or state.get("data_count", 0) == 0:
             time_range = f"{state.get('query_start')} 至 {state.get('query_end')}"
-            return {"final_response": f"我在該時段（{time_range}）找不到您的紀錄，無法進行分析。"}
+            return {
+                "final_response": f"我在該時段（{time_range}）找不到您的紀錄，無法進行分析。",
+                "is_emergency": False,
+                "context_data": raw_data,
+            }
         data_list = []
+        parsed_json = {}
         try:
             # 假設 raw_data 是字串格式，先轉 JSON
             parsed_json = (json.loads(raw_data)

@@ -70,11 +70,11 @@ async def test_health_analyst_emergency_flag(fake_llm_factory, mock_state):
         "context_data": mock_data,
         "input_message": "幫我分析",
         "query_start": "2026-01-01",
-        "query_end": "2026-01-07"
+        "query_end": "2026-01-07",
+        "data_count": 1
     })
 
     res = await analyst_nodes.node_health_analyst(mock_state)
-
     assert res["is_emergency"] is True
     assert "[EMERGENCY]" not in res["final_response"]
     assert "請立即就醫" in res["final_response"]

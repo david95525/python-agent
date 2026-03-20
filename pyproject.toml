@@ -11,6 +11,7 @@ dependencies = [
     "autogen-ext>=0.7.5",
     "azure-search-documents>=11.6.0",
     "deepagents>=0.3.11",
+    "deepeval>=3.9.1",
     "duckduckgo-search>=6.0.0",
     "fastapi[standard]>=0.128.0",
     "ipython>=8.38.0",

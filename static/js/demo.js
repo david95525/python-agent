@@ -70,28 +70,49 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * 核心渲染邏輯：將 LLM 回傳的 JSON 轉為 HTML 結構
+     * 升級版：支援 highlights 顯示與多模態並存
      */
     function renderAIResponse(jsonString) {
         const aiMsgDiv = document.createElement('div');
         aiMsgDiv.className = 'message ai-msg';
 
         try {
-            // 嘗試解析 JSON
             const data = JSON.parse(jsonString);
 
-            // 建立容器
-            let htmlContent = `<div class="summary" style="margin-bottom: 8px; font-weight: bold;">${data.summary}</div>`;
+            // 基礎文字總結
+            let htmlContent = `<div class="summary" style="margin-bottom: 12px; font-weight: bold; border-left: 3px solid #3498db; padding-left: 8px;">${data.summary}</div>`;
 
-            // 根據 mode 決定 UI 內容
-            if (data.mode === 'list' && data.data_list) {
-                htmlContent += generateTableHTML(data.data_list);
-            } else if (data.mode === 'stats' && data.statistics) {
+            // 顯示 Highlights 關鍵卡片 (不論什麼 mode，只要有 highlights 就顯示)
+            if (data.highlights && Object.keys(data.highlights).length > 0) {
+                htmlContent += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">`;
+                for (const [key, value] of Object.entries(data.highlights)) {
+                    htmlContent += `
+                    <div style="background: #fff5f5; border: 1px solid #fed7d7; padding: 8px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 11px; color: #c53030; margin-bottom: 2px;">${key}</div>
+                        <div style="font-size: 16px; font-weight: bold; color: #9b2c2c;">${value}</div>
+                    </div>`;
+                }
+                htmlContent += `</div>`;
+            }
+
+            // 根據模式呈現主要內容
+            if (data.mode === 'stats' && data.statistics) {
+                //傳統統計模式
                 htmlContent += generateStatsCards(data.statistics);
+            }
+
+            // 明細列表 (只要有 data_list 且長度大於 0 就顯示表格)
+            // 這樣可以滿足「告訴我有幾筆，並列出來」的需求
+            if (data.data_list && data.data_list.length > 0) {
+                if (data.mode === 'highlights') {
+                    htmlContent += `<div style="font-size: 12px; color: #888; margin-bottom: 4px;">符合條件的數據明細：</div>`;
+                }
+                htmlContent += generateTableHTML(data.data_list);
             }
 
             aiMsgDiv.innerHTML = htmlContent;
         } catch (e) {
-            // 如果解析失敗（例如 LLM 回傳純文字），則直接顯示
+            // 解析失敗則降級為純文字
             aiMsgDiv.textContent = jsonString;
         }
 
