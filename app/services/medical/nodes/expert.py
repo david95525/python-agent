@@ -42,18 +42,19 @@ class ExpertNodes:
             )
         # 取得用戶當前的需求
         user_intent = state["input_message"]
+        analysis_summary = state.get("analysis_summary", "無先前的分析紀錄")
 
         # 使用 with_structured_output 確保 LLM 回傳的是 ChartParams 物件而非字串
         structured_llm = self.llm.with_structured_output(ChartParams)
-        # 升級指令：讓 LLM 決定要畫什麼指標
-        # 注意：這裡我們傳入 raw_data 的範例，讓 LLM 知道有哪些欄位可用
+        # 升級指令：讓 LLM 決定要畫什麼指標，並參考先前的分析結果
         data_sample = raw_data[:500]  # 擷取部分數據供 LLM 參考
         visualizer_prompt = (
             "你是一位資深的『數據視覺化專家』。\n"
-            f"【用戶當前需求】：{user_intent}\n\n"  # 告訴 AI 用戶要看什麼
+            f"【用戶當前需求】：{user_intent}\n"
+            f"【先前的分析摘要】：{analysis_summary}\n\n"
             f"【數據樣本內容】：{data_sample}\n\n"
             "【決策準則】：\n"
-            "1. 指標精選：請嚴格根據『用戶當前需求』決定繪製的 columns。\n"
+            "1. 指標精選：請嚴格根據『用戶當前需求』與『分析摘要』決定繪製的 columns。\n"
             "   - 若用戶說『只要看收縮壓』，columns 僅能包含 ['sys']。\n"
             "   - 若用戶未指定，則根據數據常規 (如: ['sys', 'dia']) 繪製。\n"
             "2. 類型挑選：趨勢用 'line'，對比用 'bar'。\n"

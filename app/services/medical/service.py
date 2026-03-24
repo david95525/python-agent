@@ -47,14 +47,15 @@ class MedicalAgentService(BaseAgent):
         valid_ids = [s["id"] for s in self.skills_registry.get("skills", [])]
         valid_ids.extend(
             ["visualizer", "general", "health_analyst", "health_query"])
+
         # 2. 初始化拆出去的節點類別
         router_manager = RouterNode(self.llm, manifest, valid_ids)
         analyst = HealthAnalystNodes(self.llm)
         expert = ExpertNodes(self.llm)
-        # 定義節點 (保持不變)
+
+        # 定義節點
         graph.add_node("router", router_manager.node_router)
         graph.add_node("device_expert", expert.node_device_expert)
-        graph.add_node("parser", analyst.node_query_parser)
         graph.add_node("fetch_records", analyst.node_fetch_health_records)
         graph.add_node("health_analyst", analyst.node_health_analyst)
         graph.add_node("general_assistant", self.node_general_assistant)
@@ -68,19 +69,18 @@ class MedicalAgentService(BaseAgent):
             lambda state: state["intent"],
             {
                 "device_expert": "device_expert",
-                "health_analyst": "parser",
-                "health_query": "parser",
+                "health_analyst": "fetch_records",
+                "health_query": "fetch_records",
                 "visualizer": "visualizer",
                 "general": "general_assistant",
             },
         )
-        graph.add_edge("parser", "fetch_records")
 
         # Fetch 之後的關鍵動態路由
         def route_after_fetch(state: AgentState):
-            if state.get("data_count", 0) <= 0:
-                return "no_data"
-            # 如果意圖是純查詢，直接結束（前端會自己渲染表格）
+            if state.get("is_data_missing"):
+                return "end_with_no_data"
+            # 如果意圖是純查詢，直接結束
             if state.get("intent") == "health_query":
                 return "end_with_data"
             # 否則進入分析節點
@@ -89,7 +89,7 @@ class MedicalAgentService(BaseAgent):
         graph.add_conditional_edges("fetch_records", route_after_fetch, {
             "analyze": "health_analyst",
             "end_with_data": END,
-            "no_data": END
+            "end_with_no_data": END
         })
 
         def route_after_analysis(state: AgentState):
@@ -102,12 +102,13 @@ class MedicalAgentService(BaseAgent):
                 return "visualize"
             return "end"
 
-        # 健康分析完後，判斷是否需要「緊急建議」
+        # 健康分析完後，判斷是否需要繪圖
         graph.add_conditional_edges(
             "health_analyst",
             route_after_analysis,
             {
                 "visualize": "visualizer",
+                "emergency": END,  # 緊急情況目前直接回傳
                 "end": END
             },
         )

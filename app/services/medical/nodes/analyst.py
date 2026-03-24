@@ -14,47 +14,15 @@ class HealthAnalystNodes:
     def __init__(self, llm):
         self.llm = llm
 
-    async def node_query_parser(self, state: AgentState):
-        """
-        專門節點：分析用戶意圖，提取 API 需要的日期範圍。強化日期解析，支援更多模糊描述
-        """
-        logger.info(f"[Parser] 正在解析用戶請求中的時間範圍: {state['input_message']}")
-        # 確保這裡的代碼縮排是 4 個空格（相對於 async def）
-        current_date = datetime.now().strftime("%Y-%m-%d")
-        prompt = (f"今天是 {current_date}。\n"
-                  f"用戶問題：{state['input_message']}\n\n"
-                  "任務：提取日期範圍。請將『去年』、『上個月』、『這三天』等口語轉化為具體日期。\n"
-                  "若用戶沒提到時間或說最近，請保持為 null。\n"
-                  "【格式規範】請僅回傳 JSON：\n"
-                  '{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}')
-        res = await self.llm.ainvoke(prompt)
-        content = res.content.strip()
-        # 使用正則表達式提取 JSON 部分
-        json_match = re.search(r"\{.*\}", content, re.DOTALL)
-        try:
-            dates = json.loads(json_match.group(0)) if json_match else {
-                "start": None,
-                "end": None
-            }
-            logger.info(f"[Parser Success] 解析結果: {dates}")
-        except Exception as e:
-            logger.error(f"[Parser Error] 依然無法解析: {content}")
-            dates = {"start": None, "end": None}
-
-        return {
-            "query_start": dates.get("start"),
-            "query_end": dates.get("end")
-        }
-
     async def node_fetch_health_records(self, state: AgentState):
         """
         [獨立節點] 負責根據動態範圍抓取 API。
         """
-        # 從 Parser 拿到的時間範圍
+        # 從 Router 拿到的時間範圍
         start = state.get("query_start")
         end = state.get("query_end")
         user_id = state.get("user_id", "default_user")
-        logger.info(f"[Debug] 從 Parser 接收到的時間範圍: start={start}, end={end}")
+        logger.info(f"[Debug] 從 Router 接收到的時間範圍: start={start}, end={end}")
 
         # 呼叫工具 (此處不消耗 Gemini 配額)
         raw_response = await get_user_health_data.ainvoke({
@@ -85,6 +53,7 @@ class HealthAnalystNodes:
         return {
             "context_data": raw_response,
             "data_count": count,
+            "is_data_missing": count == 0,
             "ui_data": ui_data,
             "final_response": text_reply
         }
@@ -101,6 +70,7 @@ class HealthAnalystNodes:
                 "final_response": f"我在該時段（{time_range}）找不到您的紀錄，無法進行分析。",
                 "is_emergency": False,
                 "context_data": raw_data,
+                "is_data_missing": True
             }
         data_list = []
         parsed_json = {}
@@ -120,6 +90,7 @@ class HealthAnalystNodes:
                 f"我在系統中找不到您在該時段（{time_range_str}）的量測紀錄。\n\n💡 **建議**：您可以檢查設備是否上傳成功，或嘗試查詢其他日期範圍。",
                 "is_emergency": False,
                 "context_data": raw_data,  # 依然存入 state 避免重複抓取
+                "is_data_missing": True
             }
         # 只有有資料才去載入技能與呼叫 LLM
         skill_info = load_specialized_skill.invoke(
@@ -158,7 +129,9 @@ class HealthAnalystNodes:
 
         return {
             "final_response": clean_content,
+            "analysis_summary": clean_content,  # 存入摘要
             "is_emergency": is_emergency,
             "context_data": raw_data,
-            "ui_data": ui_data
+            "ui_data": ui_data,
+            "is_data_missing": False
         }

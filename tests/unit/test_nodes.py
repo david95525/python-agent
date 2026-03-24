@@ -5,14 +5,16 @@ from app.services.medical.nodes.router import RouterNode
 from app.services.medical.nodes.analyst import HealthAnalystNodes
 
 
+from unittest.mock import MagicMock, AsyncMock
+from app.services.medical.nodes.router import RouterNode, RouterOutput
+
 # ------------------------------------------------------------------
-# 1. 測試 RouterNode (使用工廠模式)
+# 1. 測試 RouterNode (使用 Unified Router)
 # ------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_router_logic_and_llm_intent(fake_llm_factory, mock_state):
+async def test_router_logic_and_llm_intent(mock_state):
     # 場景 A：測試硬編碼攔截 (用戶同意畫圖)
-    # 即使 LLM 回傳 "ignored"，硬編碼也應該攔截成功
-    fake_llm = fake_llm_factory(["ignored"])
+    fake_llm = MagicMock()
     router = RouterNode(llm=fake_llm,
                         manifest="...",
                         valid_ids=["visualizer", "general"])
@@ -23,9 +25,17 @@ async def test_router_logic_and_llm_intent(fake_llm_factory, mock_state):
     res_confirm = await router.node_router(mock_state)
     assert res_confirm["intent"] == "visualizer"
 
-    # 場景 B：測試 LLM 正常判斷
-    fake_llm_analyst = fake_llm_factory(["health_analyst"])
-    router_llm = RouterNode(llm=fake_llm_analyst,
+    # 場景 B：測試 LLM 正常判斷 (Structured Output)
+    mock_structured_llm = MagicMock()
+    mock_structured_llm.ainvoke = AsyncMock(return_value=RouterOutput(
+        intent="health_analyst",
+        query_start="2026-01-01",
+        query_end="2026-01-07",
+        reasoning="用戶詢問血壓狀態"
+    ))
+    fake_llm.with_structured_output.return_value = mock_structured_llm
+    
+    router_llm = RouterNode(llm=fake_llm,
                             manifest="...",
                             valid_ids=["health_analyst"])
 
@@ -34,23 +44,7 @@ async def test_router_logic_and_llm_intent(fake_llm_factory, mock_state):
 
     res_query = await router_llm.node_router(mock_state)
     assert res_query["intent"] == "health_analyst"
-
-
-# ------------------------------------------------------------------
-# 2. 測試 Parser (日期提取邏輯)
-# ------------------------------------------------------------------
-@pytest.mark.asyncio
-async def test_query_parser_dates(fake_llm_factory, mock_state):
-    # 模擬 LLM 回傳 JSON 格式
-    fake_llm = fake_llm_factory(
-        ['{"start": "2026-01-01", "end": "2026-01-07"}'])
-    analyst_nodes = HealthAnalystNodes(llm=fake_llm)
-
-    mock_state["input_message"] = "查上週紀錄"
-    res = await analyst_nodes.node_query_parser(mock_state)
-
-    assert res["query_start"] == "2026-01-01"
-    assert res["query_end"] == "2026-01-07"
+    assert res_query["query_start"] == "2026-01-01"
 
 
 # ------------------------------------------------------------------
