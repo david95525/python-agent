@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from app.services.medical.service import MedicalAgentService
 from app.services.financial_service import FinancialAgentService
-from app.services.medical_demo_service import MedicalDemoService
+
 from app.utils.logger import setup_logger
 import time
 
@@ -27,7 +27,6 @@ class InvestRequest(BaseModel):
 
 _medical_service = MedicalAgentService()
 _financial_agent = FinancialAgentService()
-_medical_demo_service = MedicalDemoService()
 
 
 @asynccontextmanager
@@ -121,22 +120,3 @@ async def invest_official(payload: InvestRequest):
         return {"mode": "Official DeepAgents", "result": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/demo/quick-chat")
-async def demo_quick_chat(request: ChatRequest):
-    logger.info(f"[API] 收到 Demo 聊天請求: {request.userId}")
-    try:
-        # 直接呼叫分離出來的 Service
-        answer = await _medical_demo_service.run_demo_chat(
-            request.userId, request.message)
-        return {
-            "status": "success",
-            "data": {
-                "text": answer,
-                "intent": "medical_demo"
-            }
-        }
-    except Exception as e:
-        logger.error(f"[API Error] Demo 失敗: {str(e)}")
-        return {"status": "error", "message": "Demo 服務異常"}

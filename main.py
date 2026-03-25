@@ -42,12 +42,6 @@ async def deep_page():
     return FileResponse("static/deep.html")
 
 
-@app.get("/demo")
-async def demo_page():
-    logger.info("進入產品 Demo 演示頁面")
-    return FileResponse("static/demo.html")
-
-
 # 靜態檔案掛載
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
