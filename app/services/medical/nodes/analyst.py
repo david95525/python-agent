@@ -1,6 +1,6 @@
 import re
 import json
-from datetime import datetime  # <--- 記得補上這個，否則 node_query_parser 會報錯
+from datetime import datetime
 from app.services.tools.medical_tools import get_user_health_data
 from app.services.tools.system_tools import load_specialized_skill
 from app.services.medical.state import AgentState
@@ -13,6 +13,30 @@ class HealthAnalystNodes:
 
     def __init__(self, llm):
         self.llm = llm
+
+    async def node_check_date(self, state: AgentState):
+        """
+        [校驗節點] 確保使用者在查詢數據時必須提供日期。
+        """
+        intent = state.get("intent")
+        query_start = state.get("query_start")
+        input_message = state.get("input_message", "")
+
+        # 簡單的日期提取邏輯 (例如: 2024-03-01 或 昨天/今天)
+        # 這裡假設如果輸入中包含數字或特定關鍵字，就視為有提供時間資訊
+        date_pattern = r"\d{4}-\d{2}-\d{2}|昨天|今天|前天|上週"
+        has_date_info = re.search(date_pattern, input_message)
+        
+        # 只有在需要查詢數據的意圖下，才檢查日期
+        if intent in ["health_query", "health_analyst"] and not query_start and not has_date_info:
+            logger.info("[Validation] 缺失查詢日期，返回要求訊息。")
+            return {
+                "final_response": "您想要查詢哪一段時間的紀錄呢？（例如：昨天、上週五，或具體日期如 2024-03-01）",
+                "is_data_missing": True, # 標記需要補件
+                "intent": "interrupt" # 強制修改 intent 為 interrupt 供判別
+            }
+        
+        return {"is_data_missing": False}
 
     async def node_fetch_health_records(self, state: AgentState):
         """

@@ -124,7 +124,15 @@ class FinancialAgentService(BaseAgent):
             "risk_level": "",
             "final_response": "",
         }
-        return await self.manual_app.ainvoke(initial_state)
+        config = {
+            "tags": ["financial_service", "manual_mode", f"symbol_{symbol}"],
+            "metadata": {
+                "source": "financial_research",
+                "symbol": symbol,
+                "mode": "manual"
+            }
+        }
+        return await self.manual_app.ainvoke(initial_state, config=config)
 
     # 官方 DeepAgents 模式進入點
     async def run_official_deep_logic(self, symbol: str):
@@ -138,7 +146,15 @@ class FinancialAgentService(BaseAgent):
                 }
             ]
         }
-        result = await self.official_deep_agent.ainvoke(input_data)
+        config = {
+            "tags": ["financial_service", "official_mode", f"symbol_{symbol}"],
+            "metadata": {
+                "source": "financial_research",
+                "symbol": symbol,
+                "mode": "official"
+            }
+        }
+        result = await self.official_deep_agent.ainvoke(input_data, config=config)
         logger.debug(f"DEBUG OFFICIAL RESULT: {result}")
         # 提取最後一條訊息作為回應
         return {

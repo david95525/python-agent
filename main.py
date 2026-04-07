@@ -6,8 +6,12 @@ from fastapi.responses import FileResponse
 from app.api.api_router import router as api_router, lifespan
 from app.api.test_router import router as test_router
 from app.utils.logger import setup_logger
+from app.core.config import settings
 
 logger = setup_logger("MainApp")
+
+# 初始化 LangSmith Tracing
+settings.setup_tracing()
 
 app = FastAPI(title="AI Agent Research Lab", lifespan=lifespan)
 

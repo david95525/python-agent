@@ -11,6 +11,28 @@ class Settings(BaseSettings):
     gemini_api_key: str
     database_url: str
 
+    # LangChain / LangSmith Tracing
+    langsmith_tracing: str = "false"
+    langsmith_endpoint: str = "https://api.smith.langchain.com"
+    langsmith_api_key: str | None = None
+    langsmith_project: str = "Agent-Research"
+
+    def setup_tracing(self):
+        """將 LangSmith 設定注入 os.environ 以供 LangChain 自動讀取"""
+        if self.langsmith_tracing.lower() == "true":
+            # LangChain SDK 核心仍主要讀取這些環境變數
+            os.environ["LANGCHAIN_TRACING_V2"] = "true"
+            os.environ["LANGCHAIN_ENDPOINT"] = self.langsmith_endpoint
+            os.environ["LANGCHAIN_PROJECT"] = self.langsmith_project
+            if self.langsmith_api_key:
+                os.environ["LANGCHAIN_API_KEY"] = self.langsmith_api_key
+            
+            # 同時注入 LANGSMITH_ 前綴以確保相容性
+            os.environ["LANGSMITH_TRACING"] = "true"
+            os.environ["LANGSMITH_ENDPOINT"] = self.langsmith_endpoint
+            os.environ["LANGSMITH_API_KEY"] = self.langsmith_api_key or ""
+            os.environ["LANGSMITH_PROJECT"] = self.langsmith_project
+
     @property
     def sqlalchemy_database_url(self) -> str:
         url = self.database_url

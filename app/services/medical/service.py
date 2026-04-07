@@ -55,6 +55,7 @@ class MedicalAgentService(BaseAgent):
 
         # 定義節點
         graph.add_node("router", router_manager.node_router)
+        graph.add_node("check_date", analyst.node_check_date)
         graph.add_node("device_expert", expert.node_device_expert)
         graph.add_node("fetch_records", analyst.node_fetch_health_records)
         graph.add_node("health_analyst", analyst.node_health_analyst)
@@ -69,12 +70,23 @@ class MedicalAgentService(BaseAgent):
             lambda state: state["intent"],
             {
                 "device_expert": "device_expert",
-                "health_analyst": "fetch_records",
-                "health_query": "fetch_records",
+                "health_analyst": "check_date",
+                "health_query": "check_date",
                 "visualizer": "visualizer",
                 "general": "general_assistant",
             },
         )
+
+        def route_after_check_date(state: AgentState):
+            # 如果標記為缺失資料（日期），直接結束要求輸入
+            if state.get("is_data_missing"):
+                return "need_info"
+            return "fetch"
+
+        graph.add_conditional_edges("check_date", route_after_check_date, {
+            "need_info": END,
+            "fetch": "fetch_records"
+        })
 
         # Fetch 之後的關鍵動態路由
         def route_after_fetch(state: AgentState):
@@ -137,35 +149,34 @@ class MedicalAgentService(BaseAgent):
     async def handle_chat(self, user_id: str, message: str) -> str:
         if self.app is None:
             await self.initialize()
-        # 取得歷史紀錄
-        config = {"configurable": {"thread_id": user_id}}
-        # initial_state 只需要傳入「增量」的東西
+        
+        # 加入 tags 與 metadata 方便在 LangSmith 監控與過濾
+        config = {
+            "configurable": {"thread_id": user_id},
+            "tags": ["medical_assistant", f"user_{user_id}"],
+            "metadata": {
+                "source": "web_chat",
+                "user_id": user_id,
+                "agent_name": "MedicalAgentService"
+            }
+        }
+        
+        # 正常的起始執行
         initial_state = {
             "user_id": user_id,
             "input_message": message,
-            "messages": [HumanMessage(content=message)],  # operator.add 會自動累加
+            "messages": [HumanMessage(content=message)],
         }
+        
         try:
             # 啟動 LangGraph 生產線
             final_state = await self.app.ainvoke(initial_state, config=config)
+            
             intent = final_state.get("intent", "general")
             mermaid_graph = self.app.get_graph().draw_mermaid()
-            active_ids = [
-                "device_expert",
-                "health_analyst",
-                "visualizer",
-                "general_assistant",
-                "health_query"  # 確保新意圖也能高亮
-            ]
-            if intent in active_ids:
-                mermaid_graph += f"\nclass {intent} activeNode"
-            if final_state.get("is_emergency"):
-                mermaid_graph += "\nclass emergency_advice activeEmergencyNode"
-            # 格式化輸出（加上追蹤資訊，方便研究分析）
-            logger.info(f"\n-Agent 路由追蹤-\n意圖：{intent}\n路徑：Router -> {intent}")
-            # 整理回傳結構
+            
             response_data = {
-                "text": final_state["final_response"],
+                "text": final_state.get("final_response", ""),
                 "graph": mermaid_graph,
                 "intent": intent,
                 "is_emergency": final_state.get("is_emergency", False),
