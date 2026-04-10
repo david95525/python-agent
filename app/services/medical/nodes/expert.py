@@ -11,24 +11,32 @@ from app.utils.logger import setup_logger
 logger = setup_logger("AgentService")
 
 
+from app.utils.prompt_manager import prompt_manager
+
 class ExpertNodes:
     def __init__(self, llm):
         self.llm = llm
 
     async def node_device_expert(self, state: AgentState):
         """硬體專家節點：專注於 RAG 檢索"""
-        # 動態加載Skills
-        skill_content = load_specialized_skill.invoke({"skill_name": "device_expert"})
         # 執行 RAG
         raw_info = await get_device_knowledge.ainvoke({"query": state["input_message"]})
         logger.info(f"[RAG] 檢索完成，獲取資料長度: {len(raw_info)} 字元")
-        prompt = (
-            f"### 專業設備知識庫 ###\n{raw_info}\n\n"
-            f"### 之前討論的設備 ###\n{state.get('active_focus', {}).get('device_name', '未知')}\n\n"
-            f"### 用戶追問 ###\n{state['input_message']}\n\n"
-            "指令：請結合上下文與說明書，精確回答用戶關於該設備的追問。如果用戶提到了新的代碼或功能，請從知識庫中檢索並解釋。"
+        
+        # 從 State 讀取已經載入好的技能指令 (由 Router 準備)
+        skill_content = state.get("skill_instructions") or "請根據設備知識庫回答用戶問題。"
+        
+        # 使用 PromptManager 模板
+        prompt_template = prompt_manager.get_template("device_expert")
+        full_prompt = prompt_template.format_messages(
+            raw_info=raw_info,
+            active_device=state.get('active_focus', {}).get('device_name', '未知'),
+            input_message=state['input_message']
         )
-        res = await self.llm.ainvoke(prompt)
+        
+        # 將 skill_content 合併到 System Message 中 (另一種優化方式)
+        # 這裡暫時維持原 PromptManager 結構，但邏輯已從 State 獲取
+        res = await self.llm.ainvoke(full_prompt)
         return {"final_response": res.content}
 
     async def node_visualizer(self, state: AgentState):
@@ -48,21 +56,17 @@ class ExpertNodes:
         structured_llm = self.llm.with_structured_output(ChartParams)
         # 升級指令：讓 LLM 決定要畫什麼指標，並參考先前的分析結果
         data_sample = raw_data[:500]  # 擷取部分數據供 LLM 參考
-        visualizer_prompt = (
-            "你是一位資深的『數據視覺化專家』。\n"
-            f"【用戶當前需求】：{user_intent}\n"
-            f"【先前的分析摘要】：{analysis_summary}\n\n"
-            f"【數據樣本內容】：{data_sample}\n\n"
-            "【決策準則】：\n"
-            "1. 指標精選：請嚴格根據『用戶當前需求』與『分析摘要』決定繪製的 columns。\n"
-            "   - 若用戶說『只要看收縮壓』，columns 僅能包含 ['sys']。\n"
-            "   - 若用戶未指定，則根據數據常規 (如: ['sys', 'dia']) 繪製。\n"
-            "2. 類型挑選：趨勢用 'line'，對比用 'bar'。\n"
-            "3. 標題與單位：標題需專業且對應指標，單位需正確。"
+        
+        # 使用 PromptManager 模板
+        prompt_template = prompt_manager.get_template("visualizer")
+        full_prompt = prompt_template.format_messages(
+            user_intent=user_intent,
+            analysis_summary=analysis_summary,
+            data_sample=data_sample
         )
 
         # 獲取 LLM 決策
-        params: ChartParams = await structured_llm.ainvoke(visualizer_prompt)
+        params: ChartParams = await structured_llm.ainvoke(full_prompt)
         # 執行繪圖工具 (傳入動態參數)
         chart_base64 = plot_health_chart.invoke(
             {

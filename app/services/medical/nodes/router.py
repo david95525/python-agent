@@ -19,6 +19,9 @@ class RouterOutput(BaseModel):
     reasoning: str = Field(description="判定意圖與日期的簡短理由")
 
 
+from app.utils.prompt_manager import prompt_manager
+from app.services.tools.system_tools import load_specialized_skill
+
 class RouterNode:
 
     def __init__(self, llm, manifest: str, valid_ids: list):
@@ -55,35 +58,34 @@ class RouterNode:
         last_intent = state.get("last_intent", "general")
         structured_llm = self.llm.with_structured_output(RouterOutput)
 
-        prompt = (
-            f"今天是 {current_date}。\n"
-            "你是一個專業的任務分發與實體提取中心。請根據對話歷史判斷意圖並提取日期範圍：\n\n"
-            f"【當前技能清單】\n{self.manifest}\n\n"
-            f"【上一回合意圖】：{last_intent}\n"
-            f"【用戶訊息】：{state['input_message']}\n\n"
-            "【判定意圖類別（ID）說明】：\n"
-            "1. 'device_expert': 設備硬體、故障碼、設定問題。\n"
-            "2. 'health_query': 純數據查詢。特徵是沒有詢問『為什麼』或評估。例如：『查紀錄』、『列出數據』。\n"
-            "3. 'health_analyst': 涉及評估與分析。例如：『我這樣正常嗎』、『幫我分析』、『最近血壓為什麼高』。\n"
-            "4. 'visualizer': 要求畫圖或調整圖表。\n"
-            "5. 'general': 閒聊、問候、詢問他人隱私、或是無法理解的亂碼。\n\n"
-            "【意圖慣性原則】：\n"
-            "若用戶輸入較為簡短且具備延續性（如：『那昨天呢？』、『那前天呢？』），請優先延續『上一回合意圖』。\n\n"
-            "【日期提取規範】：\n"
-            "將口語（如：『上週』、『這三天』）轉化為具體日期。若未提及則保持 null。")
+        # 從 PromptManager 獲取模板
+        prompt_template = prompt_manager.get_template("router")
+        full_prompt = prompt_template.format_messages(
+            current_date=current_date,
+            manifest=self.manifest,
+            last_intent=last_intent,
+            input_message=state['input_message']
+        )
 
         try:
-            res: RouterOutput = await structured_llm.ainvoke(prompt)
+            res: RouterOutput = await structured_llm.ainvoke(full_prompt)
             final_intent = res.intent
             logger.info(
                 f"[Router Decision] 識別意圖: {final_intent}, 日期: {res.query_start} ~ {res.query_end}"
             )
 
+            # 動態準備 Skill 指令 (Skill Prep)
+            skill_instructions = None
+            if final_intent in ["health_analyst", "device_expert"]:
+                skill_instructions = load_specialized_skill.invoke(
+                    {"skill_name": final_intent})
+
             return {
                 "intent": final_intent,
                 "last_intent": final_intent,
                 "query_start": res.query_start,
-                "query_end": res.query_end
+                "query_end": res.query_end,
+                "skill_instructions": skill_instructions
             }
         except Exception as e:
             logger.error(f"[Router Error] LLM 呼叫失敗: {e}")

@@ -9,6 +9,8 @@ from app.utils.logger import setup_logger
 logger = setup_logger("AgentService")
 
 
+from app.utils.prompt_manager import prompt_manager
+
 class HealthAnalystNodes:
 
     def __init__(self, llm):
@@ -116,20 +118,20 @@ class HealthAnalystNodes:
                 "context_data": raw_data,  # 依然存入 state 避免重複抓取
                 "is_data_missing": True
             }
-        # 只有有資料才去載入技能與呼叫 LLM
-        skill_info = load_specialized_skill.invoke(
-            {"skill_name": "health_analyst"})
-        prompt = (
-            f"### 專業知識庫 ###\n{skill_info}\n\n"
-            f"### 待分析原始數據 ###\n{raw_data}\n\n"
-            f"### 用戶指令 ###\n{state['input_message']}\n\n"
-            "【強制規範】\n"
-            "1. 不要列出量測清單（前端已顯示表格）。\n"
-            "2. **分析原則**：聚焦於數據趨勢總結（例如：數值波動情況、平均水位）。\n"
-            "3. **安全警告**：若數據含緊急血壓(≥160/100)，必須標註 [EMERGENCY]，並加上一句：『⚠️ 偵測到血壓數值過高，請立即尋求專業醫療協助或撥打急救電話。』\n"
-            "4. **嚴禁建議**：禁止提供任何關於飲食、運動、情緒或生活習慣的建議（如：多喝水、少吃鹽、放鬆心情等）。")
+        
+        # 從 State 讀取已經載入好的技能指令
+        skill_info = state.get("skill_instructions") or "請根據數據進行專業分析。"
+        
+        # 使用 PromptManager 模板
+        prompt_template = prompt_manager.get_template("health_analyst")
+        full_prompt = prompt_template.format_messages(
+            skill_info=skill_info,
+            raw_data=raw_data,
+            input_message=state['input_message']
+        )
+        
         try:
-            res = await self.llm.ainvoke(prompt)
+            res = await self.llm.ainvoke(full_prompt)
         except Exception as e:
             logger.error(f"LLM 呼叫失敗: {e}")
             return {

@@ -16,6 +16,8 @@ from app.services.medical.state import AgentState
 logger = setup_logger("AgentService")
 
 
+from app.utils.prompt_manager import prompt_manager
+
 class MedicalAgentService(BaseAgent):
 
     def __init__(self):
@@ -131,16 +133,13 @@ class MedicalAgentService(BaseAgent):
 
     async def node_general_assistant(self, state: AgentState):
         """通用節點：處理範疇外問題"""
-        prompt = ("你是一位專業且溫暖的 健康顧問助手。\n"
-                  "【職責說明】\n"
-                  "1. 處理日常寒暄（如：你好、早安）。\n"
-                  "2. 處理心情分享（如：我今天覺得很累），給予溫暖的回應並導向健康關注。\n"
-                  "3. **嚴格拒絕**非醫療/健康/設備領域的專業問題（如：股票、法律、程式開發）。\n\n"
-                  "【拒絕範例】\n"
-                  "『抱歉，我目前的專業能力專注於 醫療數據查詢與分析，無法提供關於 [用戶問題領域] 的建議。』\n\n"
-                  f"【用戶當前訊息】：{state['input_message']}\n"
-                  "請以專業、簡潔且具備同理心的口吻回覆。")
-        res = await self.llm.ainvoke(prompt)
+        # 使用 PromptManager 模板
+        prompt_template = prompt_manager.get_template("general_assistant")
+        full_prompt = prompt_template.format_messages(
+            input_message=state['input_message']
+        )
+        
+        res = await self.llm.ainvoke(full_prompt)
         logger.info(
             f"[General Assistant] 處理完畢。意圖: {state.get('intent', 'N/A')}")
         return {"final_response": res.content}

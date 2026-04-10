@@ -29,6 +29,8 @@ class AgentState(TypedDict):
     ui_data: Optional[Dict[str, Any]]
     # 存放上一次分析的摘要，供後續節點（如視覺化）參考
     analysis_summary: Optional[str]
+    # 存放動態載入的技能執行細則 (Skill Instructions)
+    skill_instructions: Optional[str]
     # 擴展用欄位
     active_filters: Dict[str, Any]
     final_response: str
