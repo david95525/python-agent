@@ -44,7 +44,7 @@ class ExpertNodes:
         # 取得數據
         raw_data = state.get("context_data")
         if not raw_data:
-            raw_data = get_user_health_data.invoke({"user_id": state["user_id"]})
+            raw_data = await get_user_health_data.ainvoke({"user_id": state["user_id"]})
             logger.warning(
                 f"[Visualizer] State 中無數據，已重新抓取用戶 {state['user_id']} 數據"
             )

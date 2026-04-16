@@ -14,6 +14,34 @@
   - **SQLite (AsyncSqliteSaver)**：負責 LangGraph 的狀態保存與對話記憶 (Thread-based Memory)。
   - **PostgreSQL (pgvector)**：專用於 RAG (檢索增強生成)，存儲 PDF 說明書的向量數據（由 `ingest_pdf.py` 處理）。
 
+# 🧩 技術實現詳解 (Technical Deep Dive)
+
+本專案的核心競爭力在於高度可控的 AI 思考鏈與透明的執行過程。以下是關鍵功能的技術實現路徑：
+
+### 1. 意圖路由與分流機制 (Routing & Branching)
+系統不再使用傳統的 if-else 硬編碼流轉，而是完全由 LLM 的判定結果驅動：
+*   **初始意圖判定**: 在 `app/services/medical/nodes/router.py` 的 `node_router` 中，利用 `structured_output` 取得 `intent`，並透過 `Command(goto=destination)` 實現非線性的節點跳轉。
+*   **純查詢早停 (Early Termination)**: 
+    *   **核心代碼**: `app/services/medical/nodes/analyst.py` -> `node_fetch_health_records()`
+    *   **邏輯**: 當 `intent == "health_query"` 時，回傳 `Command(goto=END)`。這會讓 Graph 在抓取完數據後立即終止執行，避免進入後續需要消耗 LLM Token 的 `health_analyst` 分析節點。
+*   **安全性與快取攔截**: 在 `node_router` 中，設有重複輸入快取機制，若偵測到重複輸入則直接沿用前次意圖。同時，若偵測到繪圖確認意圖，也會直接跳轉至 `visualizer` 節點。
+
+### 2. 人機協作中斷與狀態恢復 (Human-in-the-loop)
+*   **實作位置**: `app/services/medical/service.py` -> `node_check_date_wrapper()`
+*   **機制**: 使用 LangGraph 的 `interrupt()` 暫停當前 Task 並保存線程狀態（Thread State）。當使用者補齊資料（如：日期）後，透過 `Command(resume=input)` 恢復執行，並由 `Command(goto="router")` 引導回流至起點重新解析。
+
+### 3. SSE 串流與即時流程圖渲染 (Real-time Visualization)
+*   **後端監聽**: `app/services/medical/service.py` -> `handle_chat()`
+    *   利用 `app.astream_events(..., version="v2")` 監聽 `on_chain_start` 與 `on_chain_end`。
+    *   每當節點開始執行，即 `yield` 一個 `type: "graph"` 的 JSON 事件，包含最新的 Mermaid Code 與 `node_name`。
+*   **前端渲染**: `static/js/chat.js` -> `renderGraph()`
+    *   前端收到圖表事件後，會在 Mermaid 原始碼末端注入 `class {node} activeNode` 樣式代碼。
+    *   調用 `mermaid.run()` 進行渲染，達成畫面上節點隨執行進度「跳轉高亮」的視覺效果。
+
+### 4. 領域技能注入 (Skill Injection)
+*   **實作位置**: `app/utils/registry_loader.py` 與 `app/services/tools/system_tools.py`
+*   **機制**: 系統會從 `skills/` 目錄讀取對應的 `SKILL.md`（如金融專家、健康分析師），並將其內容作為 System Prompt 的一部分動態注入 LLM。這使得同一套 Graph 節點能根據當前意圖展現出完全不同的專業深度與行為規範。
+
 # 🛠️ 功能模組
 
 ### 1. 金融深度研究 (Financial Research)

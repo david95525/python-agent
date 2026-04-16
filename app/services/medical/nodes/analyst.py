@@ -1,6 +1,8 @@
 import re
 import json
 from datetime import datetime
+from langgraph.types import Command
+from langgraph.graph import END
 from app.services.tools.medical_tools import get_user_health_data
 from app.services.tools.system_tools import load_specialized_skill
 from app.services.medical.state import AgentState
@@ -26,17 +28,23 @@ class HealthAnalystNodes:
 
         # 簡單的日期提取邏輯 (例如: 2024-03-01 或 昨天/今天)
         # 這裡假設如果輸入中包含數字或特定關鍵字，就視為有提供時間資訊
-        date_pattern = r"\d{4}-\d{2}-\d{2}|昨天|今天|前天|上週"
+        date_pattern = r"\d{4}-\d{2}-\d{2}|昨天|今天|前天|上週|這週|最近|剛才"
         has_date_info = re.search(date_pattern, input_message)
         
         # 只有在需要查詢數據的意圖下，才檢查日期
-        if intent in ["health_query", "health_analyst"] and not query_start and not has_date_info:
-            logger.info("[Validation] 缺失查詢日期，返回要求訊息。")
-            return {
-                "final_response": "您想要查詢哪一段時間的紀錄呢？（例如：昨天、上週五，或具體日期如 2024-03-01）",
-                "is_data_missing": True, # 標記需要補件
-                "intent": "interrupt" # 強制修改 intent 為 interrupt 供判別
-            }
+        if intent in ["health_query", "health_analyst"]:
+            # 如果 Router 沒解析出日期，且訊息中也沒有明確的日期格式 (YYYY-MM-DD)
+            # 我們不再信任「最近」、「這週」等模糊詞彙，因為這會導致 API 抓取過多資料
+            strict_date_pattern = r"\d{4}-\d{2}-\d{2}"
+            has_strict_date = re.search(strict_date_pattern, input_message)
+            
+            if not query_start and not has_strict_date:
+                logger.info("[Validation] 缺失明確查詢日期，觸發中斷點。")
+                return {
+                    "final_response": "您想要查詢哪一段時間的紀錄呢？（例如：昨天、上週五，或具體日期如 2024-03-01）",
+                    "is_data_missing": True,
+                    "intent": "interrupt"
+                }
         
         return {"is_data_missing": False}
 
@@ -48,7 +56,9 @@ class HealthAnalystNodes:
         start = state.get("query_start")
         end = state.get("query_end")
         user_id = state.get("user_id", "default_user")
-        logger.info(f"[Debug] 從 Router 接收到的時間範圍: start={start}, end={end}")
+        intent = state.get("intent", "health_analyst") # 預設為分析
+        
+        logger.info(f"[Debug] Fetching records for intent: {intent}, range: {start} ~ {end}")
 
         # 呼叫工具 (此處不消耗 Gemini 配額)
         raw_response = await get_user_health_data.ainvoke({
@@ -56,9 +66,9 @@ class HealthAnalystNodes:
             "start_date": start,
             "end_date": end,
         })
+        
         count = 0
         records = []
-        # 解析並檢查是否有資料
         try:
             data = (json.loads(raw_response)
                     if isinstance(raw_response, str) else raw_response)
@@ -67,21 +77,23 @@ class HealthAnalystNodes:
                 count = data.get("total", 0)
         except Exception as e:
             logger.error(f"[Fetch Error] JSON 解析失敗: {e}")
-            count = 0
-        # 建立 UI 數據
-        ui_data = {"records": records, "total": count}
 
-        # 建立純查詢的預設回覆
+        ui_data = {"records": records, "total": count}
         time_display = f"{start} 至 {end}" if start and end else "最近"
-        text_reply = ""
-        if state.get("intent") == "health_query":
-            text_reply = f"已為您找到 {time_display} 期間共 {count} 筆量測紀錄。"
+
+        # 如果是純查詢，準備好最終回覆 (由 Edge 決定是否結束)
+        final_response = ""
+        if intent == "health_query":
+            final_response = f"已為您找到 {time_display} 期間共 {count} 筆量測紀錄。"
+            if count == 0:
+                final_response = f"我在 {time_display} 期間找不到您的量測紀錄。"
+            
         return {
             "context_data": raw_response,
             "data_count": count,
             "is_data_missing": count == 0,
             "ui_data": ui_data,
-            "final_response": text_reply
+            "final_response": final_response
         }
 
     async def node_health_analyst(self, state: AgentState):
@@ -90,6 +102,8 @@ class HealthAnalystNodes:
         """
 
         raw_data = state.get("context_data")
+        ui_data = state.get("ui_data")
+        
         if not raw_data or state.get("data_count", 0) == 0:
             time_range = f"{state.get('query_start')} 至 {state.get('query_end')}"
             return {
@@ -98,6 +112,7 @@ class HealthAnalystNodes:
                 "context_data": raw_data,
                 "is_data_missing": True
             }
+            
         data_list = []
         parsed_json = {}
         try:
@@ -108,6 +123,7 @@ class HealthAnalystNodes:
         except Exception as e:
             logger.error(f"解析資料失敗: {e}")
             data_list = []
+            
         # 若無資料，直接中斷流程並回覆
         if not data_list:
             time_range_str = f"{state.get('query_start')} 至 {state.get('query_end')}"
@@ -132,32 +148,41 @@ class HealthAnalystNodes:
         
         try:
             res = await self.llm.ainvoke(full_prompt)
-        except Exception as e:
-            logger.error(f"LLM 呼叫失敗: {e}")
+            # 後續正常處理
+            can_visualize = len(data_list) >= 5
+            logger.debug(f"[LLM Raw] 分析師回覆原文: {res.content}")
+            
+            is_emergency = "[EMERGENCY]" in res.content
+            clean_content = res.content.replace("[EMERGENCY]",
+                                                "").replace("[NORMAL]", "")
+
+            if can_visualize:
+                clean_content += "\n\n💡 **需要我為您繪製趨勢分析圖表嗎？**"
+
             return {
-                "final_response": "抱歉，目前系統分析功能暫時無法使用，請稍後再試。",
-                "is_emergency": False,
+                "final_response": clean_content,
+                "analysis_summary": clean_content,
+                "is_emergency": is_emergency,
+                "context_data": raw_data,
+                "ui_data": ui_data or {
+                    "records": parsed_json.get("history", []),
+                    "total": parsed_json.get("total", 0)
+                },
+                "is_data_missing": False
             }
-        # 後續處理
-        can_visualize = len(data_list) >= 5
-
-        logger.debug(f"[LLM Raw] 分析師回覆原文: {res.content}")
-        ui_data = {
-            "records": parsed_json.get("history", []),
-            "total": parsed_json.get("total", 0)
-        }
-        is_emergency = "[EMERGENCY]" in res.content
-        clean_content = res.content.replace("[EMERGENCY]",
-                                            "").replace("[NORMAL]", "")
-
-        if can_visualize:
-            clean_content += "\n\n💡 **需要我為您繪製趨勢分析圖表嗎？**"
-
-        return {
-            "final_response": clean_content,
-            "analysis_summary": clean_content,  # 存入摘要
-            "is_emergency": is_emergency,
-            "context_data": raw_data,
-            "ui_data": ui_data,
-            "is_data_missing": False
-        }
+            
+        except Exception as e:
+            logger.error(f"LLM 呼叫失敗 (Analyst): {e}")
+            error_msg = "⚠️ **醫學分析功能暫時不可用**\n\n抱歉，AI 服務目前負載過高 (503) 或發生通訊異常。雖然無法進行專業臨床分析，但我已為您列出該時段的原始紀錄供您參考。"
+            if "503" not in str(e) and "UNAVAILABLE" not in str(e):
+                 error_msg = "⚠️ **分析服務異常**\n\n系統在執行分析時遇到一點問題。以下是您的量測數據："
+            
+            return {
+                "final_response": error_msg,
+                "is_emergency": False,
+                "ui_data": ui_data or {
+                    "records": parsed_json.get("history", []),
+                    "total": parsed_json.get("total", 0)
+                },
+                "is_data_missing": False # 雖然分析失敗，但有抓到數據，所以不是資料缺失
+            }

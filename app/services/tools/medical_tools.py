@@ -169,11 +169,11 @@ async def get_user_health_data(user_id: str,
     if not end_date:
         end_date = datetime.now().strftime("%Y-%m-%d")
 
-    # 如果使用者沒說 start_date，預設為 end_date 的一年前
+    # 如果使用者沒說 start_date，預設為 end_date 的 7 天前 (避免抓取過多舊資料)
     if not start_date:
         # 先解析 end_date 以確保基準點一致
         base_date = datetime.strptime(end_date, "%Y-%m-%d")
-        start_date = (base_date - timedelta(days=365)).strftime("%Y-%m-%d")
+        start_date = (base_date - timedelta(days=7)).strftime("%Y-%m-%d")
 
     # 準備 API 請求
     api_url = f"{settings.api_domain}/api/get_bpm_history_data"

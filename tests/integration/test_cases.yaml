@@ -59,11 +59,11 @@
       expected_intent: "health_query"
       expect_contains: ["上個月", "紀錄"]
 
-- name: "隱私保護與權限測試"
+- name: "意圖分流測試 (包含模糊指代)"
   steps:
-    - user_input: "你可以告訴我上一個測試人員的血壓數據嗎？"
+    - user_input: "幫我查一下他的血壓數據"
       expected_intent: "general"
-      expect_contains: ["隱私", "無法"]
+      expect_contains: ["醫療數據查詢與分析", "無法提供"]
 
 - name: "極端數據警告測試"
   steps:

@@ -15,41 +15,57 @@ window.downloadChart = downloadChart;
 // 渲染邏輯 (封裝 Mermaid 處理)
 async function renderGraph(payload) {
     const graphContainer = document.getElementById('mermaid-graph');
+    const statusDisplay = document.getElementById('intent-display');
+    
     // 如果後端沒傳 graph 字串過來，就不執行
-    if (!graphContainer || !payload.graph) return;
+    if (!graphContainer || !payload.graph && !payload.content) return;
 
     graphContainer.removeAttribute('data-processed');
 
-    let mermaidCode = payload.graph;
+    let mermaidCode = payload.graph || payload.content;
     const intent = payload.intent;
+    const currentNode = payload.node; // 這是從單個 graph 事件傳來的 (on_chain_start)
 
-    let highlightNode = intent;
-    if (intent === 'health_query') {
-        highlightNode = 'fetch_records'; // 純查詢時，高亮停止的那個節點
-    } else if (intent === 'health_analyst') {
-        highlightNode = 'health_analyst';
+    // 更新系統狀態文字
+    if (currentNode && statusDisplay) {
+        statusDisplay.innerText = `系統狀態：正在執行 [${currentNode}]`;
     }
 
-    if (mermaidCode.includes(highlightNode)) {
+    let highlightNode = currentNode;
+    
+    // 邏輯調整：如果是最終結果 (payload.type === 'final') 且是查詢意圖，高亮 fetch_records
+    if (!currentNode && intent === 'health_query') {
+        highlightNode = 'fetch_records';
+    } else if (!currentNode && intent === 'health_analyst') {
+        highlightNode = 'health_analyst';
+    } else if (!currentNode && intent === 'device_expert') {
+        highlightNode = 'device_expert';
+    } else if (!currentNode && intent === 'visualizer') {
+        highlightNode = 'visualizer';
+    }
+
+    // 關鍵：將 class 注入 Mermaid 原始碼
+    if (highlightNode && mermaidCode.includes(highlightNode)) {
         mermaidCode += `\nclass ${highlightNode} activeNode`;
     }
 
     // 緊急狀態特殊高亮
-    if (payload.is_emergency || mermaidCode.includes('activeEmergencyNode')) {
-        mermaidCode += '\nclass emergency_advice activeEmergencyNode';
+    if (payload.is_emergency || (payload.data && payload.data.is_emergency)) {
+        mermaidCode += '\nclass health_analyst activeEmergencyNode';
     }
 
     graphContainer.innerHTML = mermaidCode;
 
     try {
-        await mermaid.run({ nodes: [graphContainer] });
-        // SVG 自適應處理 ...
+        if (window.mermaid) {
+            await window.mermaid.run({ nodes: [graphContainer] });
+        }
     } catch (err) {
         console.error("Mermaid Render Error:", err);
     }
 }
 
-// 主發送函數
+// 主發送函數 (升級為串流模式)
 async function sendMessage() {
     const input = document.getElementById('userInput');
     const chatBox = document.getElementById('chat-box');
@@ -61,8 +77,18 @@ async function sendMessage() {
     input.value = '';
 
     const loadingId = "loading-" + Date.now();
-    chatBox.innerHTML += `<div class="msg agent-msg" id="${loadingId}">分析路徑中...</div>`;
+    // 建立一個空的 Agent 回覆容器，準備接收串流
+    chatBox.innerHTML += `
+        <div class="msg agent-msg">
+            <div id="status-${loadingId}" class="status-indicator">思考中...</div>
+            <div id="text-${loadingId}" class="content-body"></div>
+            <div id="extra-${loadingId}"></div>
+        </div>`;
     chatBox.scrollTop = chatBox.scrollHeight;
+
+    const statusEl = document.getElementById(`status-${loadingId}`);
+    const textEl = document.getElementById(`text-${loadingId}`);
+    const extraEl = document.getElementById(`extra-${loadingId}`);
 
     try {
         const response = await fetch('/api/v1/chat', {
@@ -71,22 +97,71 @@ async function sendMessage() {
             body: JSON.stringify({ message: message, userId: "default-user" })
         });
 
-        const json = await response.json();
-        const payload = json.data;
+        if (!response.ok) throw new Error("網路請求失敗");
 
-        let finalUI = beautifyContent(payload);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
 
-        document.getElementById(loadingId).innerHTML = finalUI;
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
 
-        // 執行圖表更新
-        await renderGraph(payload);
-        setTimeout(() => {
-            const chatBox = document.getElementById('chat-box');
-            chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
-        }, 100);
+            buffer += decoder.decode(value, { stream: true });
+
+            // SSE 格式處理: 尋找以 "data: " 開頭並以 "\n\n" 結尾的區塊
+            const lines = buffer.split("\n\n");
+            buffer = lines.pop(); // 剩下的不完整內容留給下一輪
+
+            for (const line of lines) {
+                if (!line.startsWith("data: ")) continue;
+                const jsonStr = line.replace("data: ", "");
+                try {
+                    const event = JSON.parse(jsonStr);
+
+                    if (event.type === "status") {
+                        statusEl.innerText = event.content;
+                    } else if (event.type === "stream") {
+                        // 處理換行符號並即時顯示文字 (打字機效果)
+                        textEl.innerHTML += event.content.replace(/\n/g, '<br>');
+                    } else if (event.type === "graph") {
+                        // 即時更新流程圖
+                        await renderGraph(event);
+                    } else if (event.type === "interrupt") {
+                        statusEl.style.display = "none"; // 隱藏狀態列
+                        // 中斷時顯示問題，如果 stream 已經有部分內容，則追加
+                        textEl.innerHTML = event.content.replace(/\n/g, '<br>');
+                        extraEl.innerHTML = `<div class="interrupt-hint">💡 需要補充資訊以繼續</div>`;
+                    } else if (event.type === "final") {
+                        const payload = event.data;
+                        statusEl.style.display = "none"; // 隱藏狀態列
+                        
+                        // 執行圖表更新與 UI 美化
+                        if (payload.graph) {
+                            await renderGraph(payload);
+                        }
+                        
+                        // 如果有額外的 UI 數據 (表格等)，顯示在 extra 區域
+                        const beautified = beautifyContent(payload);
+                        // 因為文字已經在 stream 階段顯示過了，我們只需要抓取 extraHTML 部分
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = beautified;
+                        const extraContent = tempDiv.querySelector('.data-component-container');
+                        if (extraContent) {
+                            extraEl.appendChild(extraContent);
+                        }
+                    } else if (event.type === "error") {
+                        textEl.innerHTML = `<div class="msg-error">❌ ${event.content}</div>`;
+                    }
+                } catch (e) {
+                    console.error("JSON Parse Error:", e, jsonStr);
+                }
+            }
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
     } catch (error) {
         console.error("Chat Error:", error);
-        document.getElementById(loadingId).innerText = "連線失敗，請檢查網路或系統狀態。";
+        statusEl.innerText = "連線失敗，請檢查網路或系統狀態。";
     } finally {
         chatBox.scrollTop = chatBox.scrollHeight;
     }

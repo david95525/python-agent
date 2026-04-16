@@ -1,6 +1,8 @@
 # app/api/api_router.py
+import json
 from contextlib import asynccontextmanager
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from app.services.medical.service import MedicalAgentService
 from app.services.financial_service import FinancialAgentService
@@ -33,66 +35,30 @@ _financial_agent = FinancialAgentService()
 async def lifespan(app):
     """
     封裝所有服務相關的生命週期邏輯。
-    app 參數是 FastAPI 實體，雖然這裡用不到，但這是標準格式。
     """
-    # 啟動時邏輯 (選填)
     logger.info("[Lifespan] 系統服務準備就緒")
     yield
     logger.info("[Lifespan] 正在關閉所有服務資源...")
     await _medical_service.close()
-    if hasattr(_financial_agent, "close"):  # 確保金融服務也有定義 close
+    if hasattr(_financial_agent, "close"):
         await _financial_agent.close()
 
 
 @router.post("/chat")
 async def chat(request: ChatRequest):
-    start_time = time.time()
-    logger.info(f"[Request] 收到聊天請求 - User: {request.userId}")
+    logger.info(f"[Request] 收到聊天請求 (串流模式) - User: {request.userId}")
 
-    try:
-        # 呼叫後端服務
-        result_data = await _medical_service.handle_chat(
-            request.userId, request.message)
+    async def event_generator():
+        try:
+            # 呼叫後端服務 (Async Generator)
+            async for event in _medical_service.handle_chat(request.userId, request.message):
+                # 每個 event 都是 dict，將其轉為 JSON 字串並以 Server-Sent Events (SSE) 格式發送
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            logger.error(f"[Streaming Error] {e}", exc_info=True)
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)}, ensure_ascii=False)}\n\n"
 
-        # --- 關鍵防禦機制：檢查 result_data 是否為字典 ---
-        if isinstance(result_data, str):
-            # 如果 Service 因為 Exception 回傳了字串，轉化為 error 結構
-            logger.warning(f"[Service Warning] 收到非結構化回覆: {result_data}")
-            return {
-                "status": "error",
-                "message": result_data,
-                "data": {
-                    "text": result_data,
-                    "intent": "error",
-                    "graph": ""
-                },
-            }
-
-        process_time = time.time() - start_time
-
-        # 安全地使用 .get()，提供預設值
-        intent = result_data.get("intent", "unknown")
-        text = result_data.get("text", "無回覆內容")
-        graph = result_data.get("graph", "")
-
-        logger.info(
-            f"[Response] 處理成功 - Intent: {intent} | 耗時: {process_time:.2f}s")
-
-        return {
-            "status": "success",
-            "data": {
-                "text": text,
-                "graph": graph,
-                "intent": intent,
-                "ui_data": result_data.get("ui_data"),
-                "is_emergency": result_data.get("is_emergency", False)
-            },
-        }
-
-    except Exception as e:
-        logger.error(f"[API Error] 處理失敗: {str(e)}", exc_info=True)
-        # 即使發生最嚴重的崩潰，也回傳 JSON 格式而非直接拋出 HTTPException（視前端需求而定）
-        return {"status": "error", "message": "Agent 內部執行錯誤，請檢查伺服器日誌。"}
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @router.post("/deep-research/invest/manual")

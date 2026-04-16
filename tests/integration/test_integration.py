@@ -41,14 +41,15 @@ async def run_scenario(case):
         }
 
         try:
-            # 修正：只傳入兩個參數，對應你的 Service 定義
-            result = await service.handle_chat(user_id=test_user_id,
-                                               message=step["user_input"])
-
-            # 你的 Service 回傳的是 response_data 字典
-            step_result["actual_intent"] = result.get("intent")
-            step_result["actual_response"] = result.get("text", "")
-            step_result["is_emergency"] = result.get("is_emergency", False)
+            # 修正：handle_chat 現在是 async generator，需要迭代獲取最終結果
+            async for event in service.handle_chat(user_id=test_user_id,
+                                               message=step["user_input"]):
+                if event["type"] == "final":
+                    result = event["data"]
+                    # 你的 Service 回傳的是 response_data 字典
+                    step_result["actual_intent"] = result.get("intent")
+                    step_result["actual_response"] = result.get("text", "")
+                    step_result["is_emergency"] = result.get("is_emergency", False)
 
             # 驗證意圖
             if "expected_intent" in step and step_result[

@@ -23,7 +23,8 @@ async def test_router_logic_and_llm_intent(mock_state):
     mock_state["input_message"] = "好啊，幫我畫"
 
     res_confirm = await router.node_router(mock_state)
-    assert res_confirm["intent"] == "visualizer"
+    # 現在回傳 Command 物件，需檢查其 update 屬性
+    assert res_confirm.update["intent"] == "visualizer"
 
     # 場景 B：測試 LLM 正常判斷 (Structured Output)
     mock_structured_llm = MagicMock()
@@ -43,8 +44,8 @@ async def test_router_logic_and_llm_intent(mock_state):
     mock_state["input_message"] = "我最近血壓正常嗎？"
 
     res_query = await router_llm.node_router(mock_state)
-    assert res_query["intent"] == "health_analyst"
-    assert res_query["query_start"] == "2026-01-01"
+    assert res_query.update["intent"] == "health_analyst"
+    assert res_query.update["query_start"] == "2026-01-01"
 
 
 # ------------------------------------------------------------------

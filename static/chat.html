@@ -40,22 +40,6 @@
         </div>
     </div>
     <script src="/static/js/chat.js"></script>
-    <script>
-        async function updateMermaidGraph(code, intent, isEmergency) {
-            if (!window.mermaid) return;
-            const container = document.getElementById('mermaid-graph');
-            container.removeAttribute('data-processed');
-
-            let mermaidCode = code;
-            // 修正：對應後端可能的節點名稱
-            const activeClass = isEmergency ? 'activeEmergencyNode' : 'activeNode';
-            mermaidCode += `\nclass ${intent} ${activeClass}`;
-
-            container.innerHTML = mermaidCode;
-            await mermaid.run({ nodes: [container] });
-        }
-        window.updateMermaidGraph = updateMermaidGraph;
-    </script>
 </body>
 
 </html>
