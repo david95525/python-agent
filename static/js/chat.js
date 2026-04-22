@@ -66,15 +66,17 @@ async function renderGraph(payload) {
 }
 
 // 主發送函數 (升級為串流模式)
-async function sendMessage() {
+async function sendMessage(manualMessage = null) {
     const input = document.getElementById('userInput');
     const chatBox = document.getElementById('chat-box');
-    const message = input.value.trim();
+    const message = (typeof manualMessage === 'string') ? manualMessage : input.value.trim();
     if (!message) return;
 
     // 用戶訊息 UI
     chatBox.innerHTML += `<div class="msg user-msg">${message}</div>`;
-    input.value = '';
+    if (!manualMessage || typeof manualMessage !== 'string') {
+        input.value = '';
+    }
 
     const loadingId = "loading-" + Date.now();
     // 建立一個空的 Agent 回覆容器，準備接收串流
@@ -203,7 +205,75 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
     }
+
+    // 初始化建議按鈕
+    renderSuggestions();
 });
+
+// 建議問題配置
+const suggestionsConfig = {
+    main: [
+        { label: "📊 查詢血壓紀錄", value: "search" },
+        { label: "📈 統計數據 (平均/最大/最小)", value: "stats" },
+        { label: "💬 隨便聊聊", value: "general" }
+    ],
+    search: [
+        { label: "上週", text: "幫我查詢上週的血壓紀錄" },
+        { label: "一個月內", text: "幫我查詢一個月內的血壓紀錄" },
+        { label: "三個月內", text: "幫我查詢三個月內的血壓紀錄" },
+        { label: "自訂", text: "自訂查詢：" },
+        { label: "⬅ 返回", value: "main" }
+    ],
+    stats: [
+        { label: "平均值", value: "stats_range", extra: "平均值" },
+        { label: "最大值", value: "stats_range", extra: "最大值" },
+        { label: "最小值", value: "stats_range", extra: "最小值" },
+        { label: "⬅ 返回", value: "main" }
+    ],
+    stats_range: (metric) => [
+        { label: `上週${metric}`, text: `我想知道上週血壓的${metric}` },
+        { label: `一個月內${metric}`, text: `我想知道一個月內血壓的${metric}` },
+        { label: `三個月內${metric}`, text: `我想知道三個月內血壓的${metric}` },
+        { label: "⬅ 返回", value: "stats" }
+    ]
+};
+
+// 渲染建議按鈕
+function renderSuggestions(category = "main", extra = null) {
+    const container = document.getElementById(`chat-suggestions`);
+    if (!container) return;
+    container.innerHTML = "";
+    
+    let options = [];
+    if (typeof suggestionsConfig[category] === 'function') {
+        options = suggestionsConfig[category](extra);
+    } else {
+        options = suggestionsConfig[category];
+    }
+
+    options.forEach(opt => {
+        const btn = document.createElement("button");
+        btn.className = "suggestion-btn";
+        btn.innerText = opt.label;
+        btn.onclick = () => {
+            if (opt.text) {
+                // 如果有最終文字，發送訊息
+                if (opt.label === "自訂") {
+                    const input = document.getElementById(`userInput`);
+                    input.value = opt.text;
+                    input.focus();
+                } else {
+                    sendMessage(opt.text);
+                    renderSuggestions("main"); // 回到主選單
+                }
+            } else if (opt.value) {
+                // 如果是下一層
+                renderSuggestions(opt.value, opt.extra);
+            }
+        };
+        container.appendChild(btn);
+    });
+}
 /**
  * 核心渲染邏輯：嚴格遵守 SKILL.MD，不進行多餘統計
  */

@@ -11,7 +11,7 @@ from app.core.config import settings
 logger = setup_logger("MainApp")
 
 # 初始化 LangSmith Tracing
-settings.setup_tracing()
+# settings.setup_tracing()
 
 app = FastAPI(title="AI Agent Research Lab", lifespan=lifespan)
 

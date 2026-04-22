@@ -131,6 +131,31 @@ body {
     stroke-width: 3px !important;
 }
 
+/* Suggestion Area */
+.suggestion-area {
+    padding: 10px;
+    background: #fdfdfd;
+    border-top: 1px solid #eee;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.suggestion-btn {
+    padding: 6px 10px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 15px;
+    font-size: 12px;
+    color: #555;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.suggestion-btn:hover {
+    background: #f0f7ff;
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
 .input-area {
     padding: 15px;
     display: flex;

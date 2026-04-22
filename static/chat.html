@@ -16,7 +16,7 @@
 <body>
     <div class="chat-container">
         <div class="chat-header">
-            Microlife 智能助手
+            生理資料助理
             <span id="provider-info" style="font-size: 0.6em; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 10px; margin-left: 10px; font-weight: normal;">
                 Loading...
             </span>
@@ -30,6 +30,8 @@
                 請輸入您的設備狀態或測量數值，我將為您進行分析。
             </div>
         </div>
+        <!-- 建議問題區塊 -->
+        <div class="suggestion-area" id="chat-suggestions"></div>
         <div class="input-area">
             <input type="text" id="userInput" placeholder="請輸入問題...">
             <button id="sendBtn">送出</button>
