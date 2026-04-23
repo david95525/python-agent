@@ -176,7 +176,7 @@ async def get_user_health_data(user_id: str,
         start_date = (base_date - timedelta(days=7)).strftime("%Y-%m-%d")
 
     # 準備 API 請求
-    api_url = f"{settings.api_domain}/api/get_bpm_history_data"
+    api_url = f"{settings.external_api_url}/api/get_bpm_history_data"
     params = {
         "start": start_date,
         "end": end_date,
@@ -186,7 +186,7 @@ async def get_user_health_data(user_id: str,
     }
 
     headers = {
-        "Authorization": f"Bearer {settings.api_token}",
+        "Authorization": f"Bearer {settings.app_auth_token}",
         "Content-Type": "application/json",
     }
 

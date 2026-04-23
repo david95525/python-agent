@@ -2,6 +2,10 @@
  * Deep Agent 投資對比邏輯
  */
 
+// --- 安全機制設定 ---
+// 這裡從後端動態注入的 window.ENV 獲取
+const getApiToken = () => (window.ENV ? window.ENV.APP_AUTH_TOKEN : 'your_token_here'); 
+
 // 重置 UI 狀態
 function resetUI() {
     document.getElementById('manualResult').innerHTML =
@@ -43,7 +47,10 @@ async function fetchManual(symbol) {
     try {
         const response = await fetch('/api/v1/deep-research/invest/manual', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-API-Key': getApiToken()
+            },
             body: JSON.stringify({ symbol: symbol })
         });
 
@@ -79,7 +86,10 @@ async function fetchOfficial(symbol) {
     try {
         const response = await fetch('/api/v1/deep-research/invest/official', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-API-Key': getApiToken()
+            },
             body: JSON.stringify({ symbol: symbol })
         });
 
@@ -118,10 +128,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const startBtn = document.getElementById('startBtn');
     const symbolInput = document.getElementById('symbolInput');
 
-    // 獲取並顯示 Provider 資訊
+    // 獲獲取並顯示 Provider 資訊
     async function fetchConfig() {
         try {
-            const response = await fetch('/api/v1/config');
+            const response = await fetch('/api/v1/config', {
+                headers: { 'X-API-Key': getApiToken() }
+            });
             const config = await response.json();
             const providerEl = document.getElementById('provider-info');
             if (providerEl) {

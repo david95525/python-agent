@@ -6,10 +6,13 @@ class Settings(BaseSettings):
     port: int = 8000
     environment: str = "development"
     llm_provider: str = "google"
-    api_domain: str
-    api_token: str
+    external_api_url: str
+    app_auth_token: str
     gemini_api_key: str
     #database_url: str
+
+    # CORS
+    backend_cors_origins: list[str] = [""]
 
     # AWS / Bedrock
     aws_access_key_id: str | None = None

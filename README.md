@@ -67,8 +67,9 @@
    # PostgreSQL 用於 pgvector (RAG 存儲)
    DATABASE_URL=postgresql+psycopg://postgres:密碼@db:5432/postgres
    # 遠端健康數據 API
-   API_DOMAIN=https://api.example.com
-   API_TOKEN=你的Token
+   EXTERNAL_API_URL=https://api.example.com
+   # 本伺服器存取密碼 (由前端或外部調用時使用)
+   APP_AUTH_TOKEN=your_secure_token
    ```
 
 2. **使用 Docker Compose 一鍵部署 (推薦)**

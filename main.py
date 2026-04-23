@@ -1,8 +1,10 @@
 # main.py
 import uvicorn
-from fastapi import FastAPI
+import os
+from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.middleware.cors import CORSMiddleware
 from app.api.api_router import router as api_router, lifespan
 from app.api.test_router import router as test_router
 from app.utils.logger import setup_logger
@@ -10,10 +12,53 @@ from app.core.config import settings
 
 logger = setup_logger("MainApp")
 
-# 初始化 LangSmith Tracing
-# settings.setup_tracing()
-
 app = FastAPI(title="AI Agent Research Lab", lifespan=lifespan)
+
+# 設定 CORS
+if settings.backend_cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[str(origin) for origin in settings.backend_cors_origins],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+# 安全標頭中間件
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
+# 動態配置腳本：讓前端取得 API Token
+@app.get("/api/v1/env-config.js")
+async def get_env_config(request: Request):
+    """
+    動態生成 JS 腳本，將後端的 app_auth_token 注入到前端。
+    安全性：檢查 Referer 是否來自允許的網域。
+    """
+    referer = request.headers.get("referer")
+    # 簡單檢查：如果 Referer 存在且不包含你的 domain，可以拒絕 (本地測試時 referer 可能為空)
+    is_allowed = not referer or settings.external_api_url in referer
+    
+    # 開放開發環境下的本地測試
+    if not is_allowed and settings.environment == "development":
+        if "localhost" in referer or "127.0.0.1" in referer:
+            is_allowed = True
+            
+    if not is_allowed:
+        return Response(
+            content="console.error('Unauthorized domain: ' + window.location.origin);", 
+            status_code=403, 
+            media_type="application/javascript"
+        )
+    
+    config_js = f"window.ENV = {{ APP_AUTH_TOKEN: '{settings.app_auth_token}' }};"
+    return Response(content=config_js, media_type="application/javascript")
 
 # 註冊 API 路由
 app.include_router(api_router, prefix="/api/v1", tags=["API"])

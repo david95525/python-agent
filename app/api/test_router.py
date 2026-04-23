@@ -31,7 +31,6 @@ async def execute_test(case: dict):
     呼叫 test_integration.py 裡的核心邏輯進行測試。
     """
     try:
-        # 這裡直接呼叫你之前封裝在 test_integration.py 的 run_scenario
         report = await run_scenario(case)
         return report
     except Exception as e:

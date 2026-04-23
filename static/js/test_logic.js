@@ -3,6 +3,10 @@
  * 支援載入 YAML 劇本與手動編輯即時測試
  */
 
+// --- 安全機制設定 ---
+// 這裡從後端動態注入的 window.ENV 獲取
+const getApiToken = () => (window.ENV ? window.ENV.APP_AUTH_TOKEN : 'your_token_here'); 
+
 let currentScenario = { name: "", steps: [] };
 let lastReport = null;
 
@@ -24,7 +28,9 @@ window.onload = async () => {
 async function fetchScenarios() {
     const listContainer = document.getElementById('scenarioList');
     try {
-        const response = await fetch('/api/test/scenarios');
+        const response = await fetch('/api/test/scenarios', {
+            headers: { 'X-API-Key': getApiToken() }
+        });
         const scenarios = await response.json();
         listContainer.innerHTML = '';
         scenarios.forEach(s => {
@@ -124,7 +130,10 @@ async function runTest() {
     try {
         const response = await fetch('/api/test/run-test', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-API-Key': getApiToken()
+            },
             body: JSON.stringify(payload)
         });
         const report = await response.json();

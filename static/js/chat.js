@@ -2,6 +2,8 @@
  * AI Agent - Chat Module
  */
 
+const getApiToken = () => (window.ENV ? window.ENV.APP_AUTH_TOKEN : 'your_token_here');
+
 // 下載功能
 function downloadChart(base64Data) {
     const link = document.createElement('a');
@@ -65,6 +67,9 @@ async function renderGraph(payload) {
     }
 }
 
+// --- 安全機制設定 ---
+// 這裡可以改為從 localStorage 獲取，或是部署時由後端注入
+
 // 主發送函數 (升級為串流模式)
 async function sendMessage(manualMessage = null) {
     const input = document.getElementById('userInput');
@@ -95,7 +100,10 @@ async function sendMessage(manualMessage = null) {
     try {
         const response = await fetch('/api/v1/chat', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-API-Key': getApiToken()
+            },
             body: JSON.stringify({ message: message, userId: "default-user" })
         });
 
@@ -179,7 +187,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 獲取並顯示 Provider 資訊
     async function fetchConfig() {
         try {
-            const response = await fetch('/api/v1/config');
+            const response = await fetch('/api/v1/config', {
+                headers: { 'X-API-Key': getApiToken() }
+            });
             const config = await response.json();
             const providerEl = document.getElementById('provider-info');
             if (providerEl) {

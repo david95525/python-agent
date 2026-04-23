@@ -27,7 +27,6 @@ def get_embeddings():
     elif provider == "openai":
         return OpenAIEmbeddings(model="text-embedding-3-small")
     elif provider == "bedrock":
-        # 未來遷移到 AWS 時只需改環境變數
         return BedrockEmbeddings(region_name=os.getenv("AWS_REGION",
                                                        "us-east-1"),
                                  model_id="amazon.titan-embed-text-v2:0")

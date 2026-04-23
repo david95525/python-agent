@@ -1,18 +1,19 @@
 # app/api/api_router.py
 import json
 from contextlib import asynccontextmanager
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from app.services.medical.service import MedicalAgentService
 from app.services.financial_service import FinancialAgentService
 from app.core.config import settings
+from app.core.security import get_api_key
 
 from app.utils.logger import setup_logger
 import time
 
-# 建立路由物件
-router = APIRouter()
+# 建立路由物件，並加入 API Key 驗證作為全局依賴
+router = APIRouter(dependencies=[Depends(get_api_key)])
 
 logger = setup_logger("ApiRouter")
 
