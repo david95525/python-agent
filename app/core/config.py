@@ -7,8 +7,9 @@ class Settings(BaseSettings):
     environment: str = "development"
     llm_provider: str = "google"
     external_api_url: str
-    app_auth_token: str
-    app_domain: str = "" # 伺服器網域，用於 Referer 檢查
+    external_api_token: str # 外部醫療 API 的 Token
+    app_auth_token: str    # 本伺服器的存取密碼
+    app_domain: str = "" # 您自己的伺服器網域，用於 Referer 檢查
     gemini_api_key: str
     #database_url: str
 
@@ -38,7 +39,7 @@ class Settings(BaseSettings):
             os.environ["LANGCHAIN_PROJECT"] = self.langsmith_project
             if self.langsmith_api_key:
                 os.environ["LANGCHAIN_API_KEY"] = self.langsmith_api_key
-            
+
             # 同時注入 LANGSMITH_ 前綴以確保相容性
             os.environ["LANGSMITH_TRACING"] = "true"
             os.environ["LANGSMITH_ENDPOINT"] = self.langsmith_endpoint
@@ -59,3 +60,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+

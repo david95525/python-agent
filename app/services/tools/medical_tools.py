@@ -186,7 +186,7 @@ async def get_user_health_data(user_id: str,
     }
 
     headers = {
-        "Authorization": f"Bearer {settings.app_auth_token}",
+        "Authorization": f"Bearer {settings.external_api_token}",
         "Content-Type": "application/json",
     }
 
