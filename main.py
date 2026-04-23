@@ -42,12 +42,12 @@ async def get_env_config(request: Request):
     安全性：檢查 Referer 是否來自允許的網域。
     """
     referer = request.headers.get("referer")
-    # 簡單檢查：如果 Referer 存在且不包含你的 domain，可以拒絕 (本地測試時 referer 可能為空)
-    is_allowed = not referer or settings.external_api_url in referer
+    # 簡單檢查：如果 Referer 存在且不包含您的 domain，可以拒絕 (本地測試時 referer 可能為空)
+    is_allowed = not referer or (settings.app_domain and settings.app_domain in referer)
     
     # 開放開發環境下的本地測試
     if not is_allowed and settings.environment == "development":
-        if "localhost" in referer or "127.0.0.1" in referer:
+        if referer and ("localhost" in referer or "127.0.0.1" in referer):
             is_allowed = True
             
     if not is_allowed:

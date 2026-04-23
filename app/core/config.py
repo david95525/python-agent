@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     llm_provider: str = "google"
     external_api_url: str
     app_auth_token: str
+    app_domain: str = "" # 伺服器網域，用於 Referer 檢查
     gemini_api_key: str
     #database_url: str
 

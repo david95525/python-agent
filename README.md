@@ -68,6 +68,8 @@
    DATABASE_URL=postgresql+psycopg://postgres:密碼@db:5432/postgres
    # 遠端健康數據 API
    EXTERNAL_API_URL=https://api.example.com
+   # 伺服器網域 (用於安全性檢查)
+   APP_DOMAIN=your-agent-lab.com
    # 本伺服器存取密碼 (由前端或外部調用時使用)
    APP_AUTH_TOKEN=your_secure_token
    ```
